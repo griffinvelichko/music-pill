@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>music-pill: plain HTML example</title>
+  <style>
+    body { margin: 0; padding: 32px 16px; font: 16px/1.5 system-ui, sans-serif; max-width: 640px; margin-inline: auto; }
+    @media (prefers-color-scheme: dark) { body { background: #111; color: #f5f5f7; } a { color: #5eb1ff; } }
+  </style>
+  <!-- Local dist build. After publishing you would use your own hosted copy
+       (e.g. /vendor/music-pill/auto.js) or a pinned CDN URL instead. -->
+  <script type="module" src="../../dist/auto.js"></script>
+</head>
+<body>
+  <h1>Plain HTML example</h1>
+  <p>This page shows a <strong>link-only</strong> pill: it links to the song on
+    Spotify and plays no audio, so it has no sound button.</p>
+  <p>To add background audio, add <code>audio-src</code> pointing at a file of
+    <em>the same recording</em> that you are licensed to play on your site.
+    Linking to Spotify grants no audio rights.</p>
+  <p>Run <code>npm run build &amp;&amp; npm run serve</code> and open
+    <code>http://127.0.0.1:4173/examples/plain-html/</code>.</p>
+
+  <music-pill
+    spotify-url="https://open.spotify.com/track/4PTG3Z6ehGkBFwjybzWkR8"
+    song-title="Never Gonna Give You Up"
+    artist="Rick Astley"
+    position="bottom-right"
+  ></music-pill>
+
+  <!-- The minimal valid tag renders a generic "Listen on Spotify" link: -->
+  <music-pill spotify-url="https://open.spotify.com/track/4PTG3Z6ehGkBFwjybzWkR8" position="top-right"></music-pill>
+</body>
+</html>

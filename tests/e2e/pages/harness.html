@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>music-pill e2e harness</title>
+  <style>body { margin: 0; min-height: 100vh; font: 16px system-ui, sans-serif; background: #f4f4f6; } main { padding: 24px; }</style>
+  <script>
+    // Test instrumentation (not part of the component). Tees whatever reaches
+    // an AudioContext destination into an AnalyserNode so tests can measure the
+    // real output level, and records gain ramps.
+    (() => {
+      const connect = AudioNode.prototype.connect;
+      window.__taps = [];
+      window.__ramps = [];
+      AudioNode.prototype.connect = function (dest, ...rest) {
+        if (typeof AudioDestinationNode !== 'undefined' && dest instanceof AudioDestinationNode) {
+          const analyser = this.context.createAnalyser();
+          analyser.fftSize = 2048;
+          const sink = this.context.createGain();
+          sink.gain.value = 0;
+          connect.call(this, analyser);
+          connect.call(analyser, sink);
+          connect.call(sink, dest);
+          window.__taps.push(analyser);
+        }
+        return connect.call(this, dest, ...rest);
+      };
+      const ramp = AudioParam.prototype.linearRampToValueAtTime;
+      AudioParam.prototype.linearRampToValueAtTime = function (value, time) {
+        window.__ramps.push({ value, time });
+        return ramp.call(this, value, time);
+      };
+      // Loudest RMS across taps whose context is still running.
+      window.__level = () => {
+        let max = 0;
+        for (const analyser of window.__taps) {
+          if (analyser.context.state !== 'running') continue;
+          const buf = new Float32Array(analyser.fftSize);
+          analyser.getFloatTimeDomainData(buf);
+          let sum = 0;
+          for (const x of buf) sum += x * x;
+          max = Math.max(max, Math.sqrt(sum / buf.length));
+        }
+        return max;
+      };
+    })();
+  </script>
+</head>
+<body>
+  <main>
+    <h1>music-pill test harness</h1>
+    <p>Automated-test page. The audio is a generated test tone and the Spotify
+      URL is a non-existent fixture track; neither is a real recording.</p>
+    <p><a href="#" id="page-link">A page link before the pill</a></p>
+  </main>
+  <script type="module">
+    import '/dist/auto.js';
+    const params = new URLSearchParams(location.search);
+    window.__events = [];
+    for (const type of ['music-pill-ready', 'music-pill-statechange', 'music-pill-autoplay-blocked', 'music-pill-error']) {
+      document.addEventListener(type, (e) => window.__events.push({ type, detail: e.detail }));
+    }
+    const count = Number(params.get('count') ?? 1);
+    params.delete('count');
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('music-pill');
+      el.id = `pill-${i}`;
+      el.setAttribute('spotify-url', 'https://open.spotify.com/track/MusicPillTestFixture00');
+      el.setAttribute('song-title', 'Test tone (generated fixture)');
+      el.setAttribute('artist', 'Not a Spotify recording');
+      for (const [k, v] of params) el.setAttribute(k, v);
+      if (i > 0) el.setAttribute('position', 'top-right');
+      document.body.append(el);
+    }
+  </script>
+</body>
+</html>

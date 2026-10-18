@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>music-pill playground</title>
+  <meta name="description" content="Configure a music-pill and copy the generated snippet.">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f5f7;
+      --panel: #ffffff;
+      --fg: #1d1d1f;
+      --muted: #5f5f64;
+      --line: #d9d9de;
+      --accent: #0066cc;
+      --warn-bg: #fff4e5;
+      --warn-fg: #7a4100;
+      --ok-fg: #1d6b2f;
+      --code-bg: #f0f0f3;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111113;
+        --panel: #1c1c1f;
+        --fg: #f5f5f7;
+        --muted: #a8a8ae;
+        --line: #333338;
+        --accent: #5eb1ff;
+        --warn-bg: #3a2a12;
+        --warn-fg: #ffd59a;
+        --ok-fg: #7ed99a;
+        --code-bg: #26262a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 16px 160px; }
+    h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.02em; }
+    .lede { color: var(--muted); margin: 0 0 24px; }
+    .tabs { display: flex; gap: 4px; padding: 4px; background: var(--code-bg); border-radius: 10px; width: fit-content; margin-bottom: 16px; }
+    .tabs button { border: 0; background: transparent; color: var(--fg); font: inherit; padding: 6px 14px; border-radius: 7px; cursor: pointer; }
+    .tabs button[aria-selected="true"] { background: var(--panel); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); font-weight: 600; }
+    section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    section.panel h2 { font-size: 15px; margin: 0 0 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px; }
+    label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+    label .hint { font-weight: 400; color: var(--muted); }
+    input[type="text"], input[type="url"], input[type="number"], select {
+      font: inherit; font-weight: 400; color: var(--fg); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; width: 100%; min-width: 0;
+    }
+    input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .wide { grid-column: 1 / -1; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button.action { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+    button.action:hover { border-color: var(--accent); }
+    .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+    .warn { background: var(--warn-bg); color: var(--warn-fg); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 12px 0 0; }
+    .warn:empty { display: none; }
+    .ok { color: var(--ok-fg); }
+    pre { margin: 0; background: var(--code-bg); border-radius: 10px; padding: 14px; overflow-x: auto; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+    .colour { display: grid; grid-template-columns: 40px 1fr; gap: 6px; align-items: center; }
+    .colour input[type="color"] { width: 40px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; }
+    .status { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+    [hidden] { display: none !important; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>music-pill playground</h1>
+  <p class="lede">Configure a pill, preview it live in the corner of this page, and copy the snippet.</p>
+
+  <div class="tabs" role="tablist" aria-label="Mode">
+    <button role="tab" id="tab-track" aria-selected="true" aria-controls="mode-track">Spotify track</button>
+    <button role="tab" id="tab-tone" aria-selected="false" aria-controls="mode-tone">Test tone (audio engine)</button>
+  </div>
+
+  <div id="mode-track" role="tabpanel" aria-labelledby="tab-track">
+    <section class="panel">
+      <h2>Song</h2>
+      <div class="grid">
+        <label class="wide">Spotify track URL <span class="hint">The link destination only. It is never played.</span>
+          <input id="spotify-url" type="url" value="https://open.spotify.com/track/4PTG3Z6ehGkBFwjybzWkR8" spellcheck="false">
+        </label>
+        <label>Song title <input id="song-title" type="text" value="Never Gonna Give You Up"></label>
+        <label>Artist <input id="artist" type="text" value="Rick Astley"></label>
+        <label class="wide">Artwork URL <span class="hint">Optional. Complete artwork is shown, never cropped.</span>
+          <input id="artwork" type="url" placeholder="/images/album.jpg" spellcheck="false">
+        </label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="action" id="oembed" type="button">Fetch title &amp; artwork from Spotify oEmbed</button>
+        <span id="oembed-status" class="status" role="status"></span>
+      </div>
+      <p class="note">oEmbed returns a title and artwork but no separate artist field, so the artist stays whatever you type.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Audio (optional)</h2>
+      <label>Audio URL <span class="hint">Leave empty for a link-only pill with no sound control.</span>
+        <input id="audio-src" type="url" placeholder="/audio/licensed-song.mp3" spellcheck="false">
+      </label>
+      <p class="warn" id="audio-warn"></p>
+      <div class="grid" style="margin-top:12px">
+        <label>Autoplay <select id="autoplay"><option value="attempt">attempt</option><option value="off">off</option></select></label>
+        <label>Volume <input id="volume" type="number" min="0" max="1" step="0.05" value="0.25"></label>
+        <label>Fade duration (s) <input id="fade-duration" type="number" min="0" max="10" step="0.1" value="1.5"></label>
+      </div>
+    </section>
+  </div>
+
+  <div id="mode-tone" role="tabpanel" aria-labelledby="tab-tone" hidden>
+    <section class="panel">
+      <h2>Test tone: audio engine check</h2>
+      <p class="warn">This mode plays a quiet generated test tone (440&nbsp;Hz + 660&nbsp;Hz) from
+        <code>fixtures/audio/test-tone.wav</code>. It is <strong>not</strong> a Spotify recording.
+        The pill's link points to a placeholder track ID that does not exist on Spotify, and no snippet is generated.
+        Use this mode only to hear fades, looping, mute and blocked-autoplay behaviour.</p>
+      <div class="grid" style="margin-top:12px">
+        <label>Fixture <select id="tone-file">
+          <option value="/fixtures/audio/test-tone.wav">6 s tone</option>
+          <option value="/fixtures/audio/short-tone.wav">1 s tone (fade clamping)</option>
+        </select></label>
+        <label>Fade duration (s) <input id="tone-fade" type="number" min="0" max="10" step="0.1" value="1.5"></label>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Appearance</h2>
+    <div class="grid">
+      <label>Position <select id="position">
+        <option>top-left</option><option>top-center</option><option>top-right</option>
+        <option>bottom-left</option><option>bottom-center</option><option selected>bottom-right</option>
+      </select></label>
+      <label>Size <select id="size"><option>sm</option><option selected>md</option><option>lg</option></select></label>
+      <label>Theme <select id="theme"><option selected>auto</option><option>light</option><option>dark</option></select></label>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <label style="display:flex;gap:8px;align-items:center;font-weight:600"><input id="custom-colours" type="checkbox"> Custom colours</label>
+    </div>
+    <div class="grid" id="colour-fields" hidden style="margin-top:10px">
+      <label>Background <span class="colour"><input type="color" id="c-bg" value="#1e3a5f"><input type="text" id="c-bg-t" value="#1e3a5f"></span></label>
+      <label>Foreground <span class="colour"><input type="color" id="c-fg" value="#ffffff"><input type="text" id="c-fg-t" value="#ffffff"></span></label>
+      <label>Secondary text <span class="colour"><input type="color" id="c-sec" value="#cfe0f5"><input type="text" id="c-sec-t" value="#cfe0f5"></span></label>
+    </div>
+    <p class="warn" id="contrast-warn"></p>
+    <p class="note" id="contrast-ok"></p>
+  </section>
+
+  <section class="panel" id="snippet-panel">
+    <h2>Snippet</h2>
+    <pre id="snippet"></pre>
+    <div class="row" style="margin-top:10px">
+      <button class="action" id="copy" type="button">Copy snippet</button>
+      <span id="copy-status" class="status" role="status"></span>
+    </div>
+    <p class="note">Replace <code>/vendor/music-pill/auto.js</code> with the path where you host <code>dist/auto.js</code>.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Live state</h2>
+    <p class="status" id="state" aria-live="polite">playbackState: none</p>
+    <p class="status" id="last-event"></p>
+  </section>
+</main>
+
+<music-pill id="pill"></music-pill>
+
+<script type="module" src="../dist/auto.js"></script>
+<script type="module" src="./playground.js"></script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+{
+  "name": "music-pill",
+  "version": "0.1.0",
+  "description": "A framework-independent web component: a small fixed pill that links to a song on Spotify, with optional licensed background audio that fades and loops.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/griffinvelichko/music-pill.git"
+  },
+  "homepage": "https://github.com/griffinvelichko/music-pill#readme",
+  "bugs": {
+    "url": "https://github.com/griffinvelichko/music-pill/issues"
+  },
+  "type": "module",
+  "sideEffects": [
+    "./dist/auto.js"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./auto": {
+      "types": "./dist/auto.d.ts",
+      "import": "./dist/auto.js"
+    },
+    "./resolve": {
+      "types": "./dist/resolve.d.ts",
+      "import": "./dist/resolve.js"
+    },
+    "./react-jsx": {
+      "types": "./dist/react-jsx.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "music-pill-resolve": "./bin/music-pill-resolve.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "web-component",
+    "custom-element",
+    "spotify",
+    "music",
+    "audio",
+    "now-playing"
+  ],
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "build": "npm run clean && vite build && vite build --mode auto && tsc -p tsconfig.build.json",
+    "clean": "node scripts/clean.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "fixtures": "node scripts/generate-fixtures.mjs",
+    "test": "vitest run",
+    "test:ssr": "node scripts/ssr-check.mjs",
+    "test:e2e": "playwright test",
+    "test:pack": "node scripts/pack-check.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:ssr && npm run test:pack && npm run test:e2e",
+    "serve": "node scripts/serve.mjs",
+    "playground": "npm run build && node scripts/serve.mjs --open /playground/"
+  },
+  "peerDependencies": {
+    "@types/react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.0",
+    "@types/react": "19.2.17",
+    "happy-dom": "20.14.5",
+    "typescript": "6.0.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.3"
+  }
+}

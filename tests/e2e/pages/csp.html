@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>music-pill CSP check</title>
+  <script type="module" src="/dist/auto.js"></script>
+  <script type="module" src="/tests/e2e/pages/csp.js"></script>
+</head>
+<body>
+  <music-pill
+    spotify-url="https://open.spotify.com/track/MusicPillTestFixture00"
+    song-title="Test tone (generated fixture)"
+    artist="Not a Spotify recording"
+    artwork="/fixtures/artwork/tone-art.svg"
+    audio-src="/fixtures/audio/test-tone.wav"
+    autoplay="off"
+  ></music-pill>
+</body>
+</html>
