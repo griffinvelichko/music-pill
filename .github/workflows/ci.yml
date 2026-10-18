@@ -19,8 +19,8 @@ jobs:
       matrix:
         node: [22, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -37,8 +37,8 @@ jobs:
     name: Package runtime on Node 20 (SSR import)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -50,13 +50,24 @@ jobs:
     name: Browser tests (Chromium, Firefox, WebKit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
+      # Hosted runners have no sound device. Without one, Firefox and WebKit
+      # keep the AudioContext suspended and the component (correctly) reports
+      # "blocked". A virtual PulseAudio sink lets real audio flow so the tests
+      # can measure it.
+      - name: Start virtual audio sink
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=virtual
+          pactl set-default-sink virtual
       - run: npm run build
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
