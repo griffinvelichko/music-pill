@@ -8,7 +8,7 @@ that **links to a song on Spotify**, with optional background audio that
 
 <img src="docs/screenshots/iphone-dark.png" alt="Dark theme on an iPhone-sized viewport" width="260"> <img src="docs/screenshots/iphone-320-long-text.png" alt="Long title and artist truncated at a 320px viewport" width="260">
 
-- Native custom element, open Shadow DOM, vanilla TypeScript, **zero runtime dependencies** (~10 kB gzipped).
+- Native custom element, open Shadow DOM, vanilla TypeScript, **zero runtime dependencies** (~13 kB gzipped).
 - One script plus one tag. Works in plain HTML and in any framework.
 - No Spotify login, API key, backend or proxy is needed.
 - Six positions, three sizes, auto/light/dark themes, CSS custom properties, and `::part()` hooks.

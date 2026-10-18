@@ -26,6 +26,15 @@ const media = (page: Page, id = 'pill-0') =>
   }, id);
 const soundButton = (page: Page, id = 'pill-0') => page.locator(`#${id}`).getByRole('button');
 
+/** Pathname only. The harness puts source URLs in the document query string. */
+function requestPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
 async function waitForState(page: Page, expected: string, id = 'pill-0', timeout = 10_000) {
   await expect.poll(() => state(page, id), { timeout }).toBe(expected);
 }
@@ -243,7 +252,7 @@ test('several sources: the first playable file is used and the others are not fe
   await soundButton(page).click();
   await waitForState(page, 'playing');
   await expectAudible(page);
-  expect(requested.some((url) => url.includes('does-not-exist'))).toBe(false);
+  expect(requested.some((url) => requestPath(url).includes('does-not-exist'))).toBe(false);
 });
 
 test('no playable source is an accessible error and fetches nothing', async ({ page }) => {
@@ -260,7 +269,7 @@ test('no playable source is an accessible error and fetches nothing', async ({ p
   expect(
     await page.evaluate(() => document.getElementById('pill-0')!.shadowRoot!.querySelector('audio')),
   ).toBeNull();
-  expect(requested.some((url) => url.includes('test-tone.wav'))).toBe(false);
+  expect(requested.some((url) => requestPath(url).includes('test-tone.wav'))).toBe(false);
 });
 
 test('prefers-reduced-motion removes UI animation while audio fades still run', async ({ page }) => {
