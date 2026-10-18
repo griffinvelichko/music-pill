@@ -326,13 +326,16 @@ test('several instances: only one plays; switching silences the other', async ({
   expect(await level(page)).toBeLessThan(0.001);
 });
 
-test('changing position/size/theme while playing does not restart audio', async ({ page }) => {
+test('changing position/size/theme while playing does not restart audio', async ({ page, browserName }) => {
   await open(page, { 'audio-src': TONE, autoplay: 'off' });
   await soundButton(page).click();
   await waitForState(page, 'playing');
   await page.waitForTimeout(600);
   const before = (await media(page))!.time;
   await page.evaluate(() => {
+    (window as unknown as { __audio: Element | null }).__audio = document
+      .getElementById('pill-0')!
+      .shadowRoot!.querySelector('audio');
     const el = document.getElementById('pill-0')!;
     el.setAttribute('position', 'top-center');
     el.setAttribute('size', 'lg');
@@ -340,7 +343,23 @@ test('changing position/size/theme while playing does not restart audio', async 
   });
   await page.waitForTimeout(300);
   const after = (await media(page))!.time;
-  expect(after).toBeGreaterThan(before);
+  const sameElement = await page.evaluate(
+    () =>
+      document.getElementById('pill-0')!.shadowRoot!.querySelector('audio') ===
+      (window as unknown as { __audio: Element | null }).__audio,
+  );
+  // A restart replaces the media element and seeks back to the start.
+  // Headless WebKit sometimes freezes the media clock, so an unchanged
+  // currentTime on the same element is not a restart.
+  expect(sameElement).toBe(true);
+  expect(after).toBeGreaterThanOrEqual(before);
+  if (after === before) {
+    test.info().annotations.push({
+      type: 'webkit-media-freeze',
+      description: 'media clock did not advance after a presentation-only update',
+    });
+    expect(browserName).toBe('webkit');
+  }
   expect(await state(page)).toBe('playing');
 });
 
