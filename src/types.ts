@@ -27,7 +27,7 @@ export type {
  * - `blocked`  the browser refused to start audio without a user gesture.
  * - `muted`    the visitor turned website sound off. Wins over everything.
  * - `paused`   stopped because the page was hidden or another instance took over.
- * - `error`    the audio could not be loaded or faded; the link still works.
+ * - `error`    the audio could not be loaded, decoded, or played; the link still works.
  */
 export type PlaybackState =
   | 'none'
@@ -59,14 +59,34 @@ export type StateChangeReason =
 export type MusicPillErrorCode =
   /** spotify-url is missing or not an open.spotify.com track. Nothing renders. */
   | 'invalid-spotify-url'
-  /** audio-src failed to load (404, network, unsupported codec, or CORS). */
-  | 'audio-load-failed'
-  /** audio-src was rejected by URL validation. */
+  /** audio-src (or a source URL) was rejected by URL validation. */
   | 'invalid-audio-src'
+  /** The audio-sources attribute was not a usable JSON source list. */
+  | 'invalid-audio-sources'
+  /**
+   * Every supplied source had a type this browser refused via canPlayType.
+   * Nothing is fetched.
+   */
+  | 'no-playable-source'
+  /** The file could not be fetched (network, HTTP error, or CORS). */
+  | 'audio-load-failed'
+  /** The file was fetched but the browser could not decode it. */
+  | 'audio-decode-failed'
+  /** The browser rejected the media as an unsupported source at playback time. */
+  | 'audio-unsupported'
   /** The browser lacks Web Audio, so the fade/loop path cannot run. */
   | 'fade-unavailable'
   /** The loop could not restart after the track ended. */
   | 'restart-failed';
+
+/**
+ * One audio file the site owner hosts. `type` is an optional MIME type
+ * (`audio/mpeg`, `audio/mp4; codecs="mp4a.40.2"`, …) used for source selection.
+ */
+export type MusicPillAudioSource = {
+  src: string;
+  type?: string;
+};
 
 export type MusicPillReadyDetail = {
   /** Canonical Spotify track URL that the pill links to. */
@@ -110,6 +130,11 @@ export type MusicPillAttributes = {
   artist?: string;
   artwork?: string;
   'audio-src'?: string;
+  /**
+   * JSON array of audio URLs or `{ "src", "type"? }` objects. When set, it
+   * replaces `audio-src` and `<source>` children.
+   */
+  'audio-sources'?: string;
   position?: MusicPillPosition;
   size?: MusicPillSize;
   theme?: MusicPillTheme;
@@ -131,6 +156,12 @@ export interface MusicPillElement extends HTMLElement {
   enableSound(): Promise<boolean>;
   /** Turns website sound off promptly and remembers that for the session. */
   mute(): void;
+  /**
+   * Audio sources used for selection. Reading returns the current list (possibly
+   * empty). Assign an array to override `audio-src`, `audio-sources`, and
+   * `<source>` children. Assign `null` to follow those again.
+   */
+  audioSources: readonly MusicPillAudioSource[] | null;
 
   addEventListener<K extends keyof MusicPillEventMap>(
     type: K,

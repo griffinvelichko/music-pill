@@ -3,7 +3,7 @@
 //   import type {} from 'music-pill/react-jsx';
 
 import type { DetailedHTMLProps, HTMLAttributes } from 'react';
-import type { MusicPillAttributes, MusicPillElement, MusicPillEventMap } from './types.js';
+import type { MusicPillAttributes, MusicPillAudioSource, MusicPillElement, MusicPillEventMap } from './types.js';
 
 /** React 19 attaches `on<event-name>` props on custom elements as listeners. */
 export type MusicPillEventProps = {
@@ -12,7 +12,10 @@ export type MusicPillEventProps = {
 
 export type MusicPillJSXProps = DetailedHTMLProps<HTMLAttributes<MusicPillElement>, MusicPillElement> &
   MusicPillAttributes &
-  MusicPillEventProps;
+  MusicPillEventProps & {
+    /** Imperative source list. Assigning this overrides attributes and `<source>` children. */
+    audioSources?: readonly MusicPillAudioSource[] | null;
+  };
 
 declare module 'react' {
   // eslint-disable-next-line @typescript-eslint/no-namespace

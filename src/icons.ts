@@ -15,3 +15,9 @@ export const SOUND_ON_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" focusa
 
 /** Speaker with a cross: sound is off; the action "enable" is available. */
 export const SOUND_OFF_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-icon="off"><path class="solid" d="M4 9.2h3.2L11.6 5.4a.6.6 0 0 1 1 .45v12.3a.6.6 0 0 1-1 .45L7.2 14.8H4a1 1 0 0 1-1-1v-3.6a1 1 0 0 1 1-1z"/><path d="M16 9.5l5 5"/><path d="M21 9.5l-5 5"/></svg>`;
+
+/** Speaker with pause bars: playback is paused, not muted by the visitor. */
+export const SOUND_PAUSE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-icon="pause"><path class="solid" d="M4 9.2h3.2L11.6 5.4a.6.6 0 0 1 1 .45v12.3a.6.6 0 0 1-1 .45L7.2 14.8H4a1 1 0 0 1-1-1v-3.6a1 1 0 0 1 1-1z"/><path d="M16 8.5v7"/><path d="M19.5 8.5v7"/></svg>`;
+
+/** Error mark: website audio could not be loaded or played. */
+export const SOUND_ERROR_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-icon="error"><circle cx="12" cy="12" r="8"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>`;

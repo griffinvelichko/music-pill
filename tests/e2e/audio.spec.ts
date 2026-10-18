@@ -26,6 +26,15 @@ const media = (page: Page, id = 'pill-0') =>
   }, id);
 const soundButton = (page: Page, id = 'pill-0') => page.locator(`#${id}`).getByRole('button');
 
+/** Pathname only. The harness puts source URLs in the document query string. */
+function requestPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
 async function waitForState(page: Page, expected: string, id = 'pill-0', timeout = 10_000) {
   await expect.poll(() => state(page, id), { timeout }).toBe(expected);
 }
@@ -54,14 +63,20 @@ test('first-visit autoplay attempt: blocked is reported, never faked', async ({ 
   if (outcome === 'blocked') {
     expect((await events(page, 'music-pill-autoplay-blocked')).length).toBe(1);
     await expect(soundButton(page)).toHaveAccessibleName('Enable website sound');
-    await page.waitForTimeout(500);
+    await expect(page.locator('#pill-0').getByRole('status')).toHaveText('Sound off');
+    await page.waitForTimeout(300);
     expect(await level(page)).toBeLessThan(0.001);
-    // Unrelated interaction must not start sound.
-    await page.locator('#page-link').click();
+    // Scrolling is not a playback gesture.
     await page.mouse.wheel(0, 200);
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(400);
     expect(await state(page)).toBe('blocked');
     expect(await level(page)).toBeLessThan(0.001);
+    // The next click anywhere on the page starts sound once.
+    await page.locator('#page-link').click();
+    await waitForState(page, 'playing');
+    await expect(soundButton(page)).toHaveAccessibleName('Mute website sound');
+    await expect(page.locator('#pill-0').getByRole('status')).toHaveText('Playing');
+    await expectAudible(page);
   } else {
     await expectAudible(page);
   }
@@ -86,8 +101,21 @@ test('activation works when media readiness arrives later', async ({ page }) => 
   await open(page, { 'audio-src': `/slow${TONE}`, autoplay: 'off' });
   await soundButton(page).click();
   expect(await state(page)).toBe('starting');
+  await expect(page.locator('#pill-0').getByRole('status')).toHaveText('Loading audio');
+  await expect(page.locator('#pill-0').getByRole('link')).toHaveAccessibleName(/listen on Spotify/i);
   await waitForState(page, 'playing');
+  await expect(page.locator('#pill-0').getByRole('status')).toHaveText('Playing');
   await expectAudible(page);
+});
+
+test('autoplay off does not start on an unrelated click', async ({ page }) => {
+  await open(page, { 'audio-src': TONE, autoplay: 'off' });
+  expect(await state(page)).toBe('idle');
+  await page.locator('#page-link').click();
+  await page.mouse.wheel(0, 200);
+  await page.waitForTimeout(400);
+  expect(await state(page)).toBe('idle');
+  expect(await level(page)).toBeLessThan(0.001);
 });
 
 test('keyboard: Tab reaches link then sound button; Enter toggles', async ({ page, browserName }) => {
@@ -119,6 +147,7 @@ test('mute is prompt, stays in force, and persists for the session', async ({ pa
   await expectAudible(page);
   await soundButton(page).click();
   expect(await state(page)).toBe('muted');
+  await expect(page.locator('#pill-0').getByRole('status')).toHaveText('Muted');
   await page.waitForTimeout(300);
   expect(await level(page)).toBeLessThan(0.001);
   expect((await media(page))!.paused).toBe(true);
@@ -185,9 +214,14 @@ test('cross-origin audio without CORS is reported and the link keeps working', a
   await open(page, { 'audio-src': `${CROSS}/nocors${TONE}`, autoplay: 'off' });
   await soundButton(page).click();
   await waitForState(page, 'error');
-  expect((await events(page, 'music-pill-error')).map((e: any) => e.code)).toEqual(['audio-load-failed']);
+  const errors = await events(page, 'music-pill-error');
+  expect(errors).toHaveLength(1);
+  expect(['audio-load-failed', 'audio-unsupported', 'audio-decode-failed']).toContain(errors[0].code);
+  expect(String(errors[0].message)).not.toMatch(/127\.0\.0\.1|nocors|DOMException/i);
+  await expect(page.locator('#pill-0').getByRole('alert')).toHaveText(String(errors[0].message));
   await expect(soundButton(page)).toBeDisabled();
   await expect(page.locator('#pill-0').getByRole('link')).toHaveAttribute('href', /open\.spotify\.com/);
+  await expect(page.locator('#pill-0').getByRole('link')).toHaveAccessibleName(/listen on Spotify/i);
   expect(await level(page)).toBeLessThan(0.001);
 });
 
@@ -196,6 +230,67 @@ test('missing audio file is reported as unavailable', async ({ page }) => {
   await soundButton(page).click();
   await waitForState(page, 'error');
   await expect(soundButton(page)).toHaveAccessibleName('Website sound unavailable');
+  const alert = page.locator('#pill-0').getByRole('alert');
+  await expect(alert).toBeVisible();
+  await expect(alert).not.toHaveText(/does-not-exist|DOMException/i);
+  await expect(page.locator('#pill-0').getByRole('link')).toHaveAccessibleName(/listen on Spotify/i);
+});
+
+test('several sources: the first playable file is used and the others are not fetched', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (request) => requested.push(request.url()));
+  const sources = JSON.stringify([
+    { src: '/fixtures/audio/does-not-exist.mp3', type: 'audio/x-music-pill-unsupported' },
+    { src: TONE, type: 'audio/wav' },
+  ]);
+  await open(page, { sources, autoplay: 'off' });
+  const src = await page.evaluate(
+    () => document.getElementById('pill-0')!.shadowRoot!.querySelector('audio')!.getAttribute('src'),
+  );
+  expect(src).toContain('test-tone.wav');
+  expect(src).not.toContain('does-not-exist');
+  await soundButton(page).click();
+  await waitForState(page, 'playing');
+  await expectAudible(page);
+  expect(requested.some((url) => requestPath(url).includes('does-not-exist'))).toBe(false);
+});
+
+test('no playable source is an accessible error and fetches nothing', async ({ page }) => {
+  const requested: string[] = [];
+  page.on('request', (request) => requested.push(request.url()));
+  const sources = JSON.stringify([{ src: TONE, type: 'audio/x-music-pill-unsupported' }]);
+  await open(page, { sources, autoplay: 'off' });
+  await waitForState(page, 'error');
+  const errors = await events(page, 'music-pill-error');
+  expect(errors.map((e: { code: string }) => e.code)).toEqual(['no-playable-source']);
+  await expect(page.locator('#pill-0').getByRole('alert')).toContainText(/MP3/);
+  await expect(soundButton(page)).toBeDisabled();
+  await expect(page.locator('#pill-0').getByRole('link')).toHaveAccessibleName(/listen on Spotify/i);
+  expect(
+    await page.evaluate(() => document.getElementById('pill-0')!.shadowRoot!.querySelector('audio')),
+  ).toBeNull();
+  expect(requested.some((url) => requestPath(url).includes('test-tone.wav'))).toBe(false);
+});
+
+test('prefers-reduced-motion removes UI animation while audio fades still run', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await open(page, { 'audio-src': `/slow${TONE}`, autoplay: 'off' });
+  const transition = await page.evaluate(() => {
+    const pill = document.getElementById('pill-0')!.shadowRoot!.querySelector('.pill') as HTMLElement;
+    return getComputedStyle(pill).transitionDuration;
+  });
+  expect(transition.split(',').every((part) => part.trim() === '0s')).toBe(true);
+  await soundButton(page).click();
+  expect(await state(page)).toBe('starting');
+  const animation = await page.evaluate(() => {
+    const spinner = document.getElementById('pill-0')!.shadowRoot!.querySelector('.spinner') as HTMLElement;
+    const style = getComputedStyle(spinner);
+    return { name: style.animationName, duration: style.animationDuration };
+  });
+  expect(animation.name === 'none' || animation.duration.split(',').every((part) => part.trim() === '0s')).toBe(true);
+  await waitForState(page, 'playing');
+  const ramps = await page.evaluate(() => (window as unknown as { __ramps: { value: number }[] }).__ramps);
+  expect(ramps.some((ramp) => Math.abs(ramp.value - 0.25) < 1e-6)).toBe(true);
 });
 
 test('hiding the page pauses; returning resumes only previously active audio', async ({ page }) => {
@@ -209,6 +304,7 @@ test('hiding the page pauses; returning resumes only previously active audio', a
     }, v);
   await setVisibility('hidden');
   await waitForState(page, 'paused');
+  await expect(page.locator('#pill-0').getByRole('status')).toHaveText('Paused');
   await expect.poll(async () => (await media(page))!.paused).toBe(true);
   await setVisibility('visible');
   await waitForState(page, 'playing');
@@ -230,13 +326,16 @@ test('several instances: only one plays; switching silences the other', async ({
   expect(await level(page)).toBeLessThan(0.001);
 });
 
-test('changing position/size/theme while playing does not restart audio', async ({ page }) => {
+test('changing position/size/theme while playing does not restart audio', async ({ page, browserName }) => {
   await open(page, { 'audio-src': TONE, autoplay: 'off' });
   await soundButton(page).click();
   await waitForState(page, 'playing');
   await page.waitForTimeout(600);
   const before = (await media(page))!.time;
   await page.evaluate(() => {
+    (window as unknown as { __audio: Element | null }).__audio = document
+      .getElementById('pill-0')!
+      .shadowRoot!.querySelector('audio');
     const el = document.getElementById('pill-0')!;
     el.setAttribute('position', 'top-center');
     el.setAttribute('size', 'lg');
@@ -244,7 +343,23 @@ test('changing position/size/theme while playing does not restart audio', async 
   });
   await page.waitForTimeout(300);
   const after = (await media(page))!.time;
-  expect(after).toBeGreaterThan(before);
+  const sameElement = await page.evaluate(
+    () =>
+      document.getElementById('pill-0')!.shadowRoot!.querySelector('audio') ===
+      (window as unknown as { __audio: Element | null }).__audio,
+  );
+  // A restart replaces the media element and seeks back to the start.
+  // Headless WebKit sometimes freezes the media clock, so an unchanged
+  // currentTime on the same element is not a restart.
+  expect(sameElement).toBe(true);
+  expect(after).toBeGreaterThanOrEqual(before);
+  if (after === before) {
+    test.info().annotations.push({
+      type: 'webkit-media-freeze',
+      description: 'media clock did not advance after a presentation-only update',
+    });
+    expect(browserName).toBe('webkit');
+  }
   expect(await state(page)).toBe('playing');
 });
 

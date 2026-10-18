@@ -8,15 +8,21 @@ that **links to a song on Spotify**, with optional background audio that
 
 <img src="docs/screenshots/iphone-dark.png" alt="Dark theme on an iPhone-sized viewport" width="260"> <img src="docs/screenshots/iphone-320-long-text.png" alt="Long title and artist truncated at a 320px viewport" width="260">
 
-- Native custom element, open Shadow DOM, vanilla TypeScript, **zero runtime dependencies** (~10 kB gzipped).
+- Native custom element, open Shadow DOM, vanilla TypeScript, **zero runtime dependencies** (~13 kB gzipped).
 - One script plus one tag. Works in plain HTML and in any framework.
 - No Spotify login, API key, backend or proxy is needed.
 - Six positions, three sizes, auto/light/dark themes, CSS custom properties, and `::part()` hooks.
 
 > **Two separate things.** `spotify-url` is where the pill *links to*. It
-> is never fetched or played. `audio-src` is an *optional, separate* audio
-> file that you host and have the rights to play on a website. Linking to
-> Spotify grants no audio or artwork rights.
+> is never fetched or played. Audio is an *optional, separate* file (or files)
+> that you host. Linking to Spotify grants no audio or artwork rights.
+
+> **You are responsible for the rights.** music-pill does not give you music,
+> a licence, or artwork rights. You must have the rights to **every song you
+> display** (the Spotify link, title, artist, and artwork) and to **every
+> audio file you attach and play**. Audio always comes from a URL or file you
+> host. The component never downloads, rips, proxies, or plays audio from
+> Spotify.
 
 > **Status:** v0.1.0, not yet published to npm. Installation examples below use
 > placeholders. The working path today is building the repo and using the
@@ -83,7 +89,7 @@ npm install <package-name>@<version>
 | Setup | What the visitor gets |
 | --- | --- |
 | `spotify-url` (+ optional metadata) | A link pill. **No audio work at all**, no sound button, and nothing implies that music is playing. |
-| `spotify-url` + `audio-src` | The same link pill, plus background audio that fades and loops, and a separate sound on/off button. |
+| `spotify-url` + `audio-src` (or several sources) | The same link pill, plus background audio that fades and loops, and a separate sound on/off button. |
 
 ```html
 <music-pill
@@ -99,11 +105,57 @@ npm install <package-name>@<version>
 ></music-pill>
 ```
 
-When you use `audio-src`:
+When you attach audio:
 
-- It must be audio you're allowed to play publicly on a website: you own it, or you hold a licence that covers it. A Spotify link grants no such right, and **Spotify does not grant general website soundtrack rights**.
+- It must be audio you're allowed to play publicly on a website: you own it, or you hold a licence that covers it. A Spotify link grants no such right, and **Spotify does not grant general website soundtrack rights**. The same duty applies to the title, artist, and artwork you display.
 - It must be **the same recording** that the Spotify link and the title/artist describe. Never play unrelated audio under a Spotify song's label.
 - Do not use ripped Spotify audio, Spotify preview URLs, or the Spotify Web Playback SDK as a background-audio source. None of these are supported, and they are not permitted for this purpose.
+
+### Formats and several sources
+
+MP3, M4A/AAC, OGG, and WAV are the supported types. The pill asks the browser which of your files it can play (`HTMLMediaElement.canPlayType`) and uses the first one that can. It does not transcode.
+
+Give a MIME type when you know it. Otherwise the type is inferred from the extension (`.mp3` → `audio/mpeg`, `.m4a` / `.mp4` → `audio/mp4`, `.aac` → `audio/aac`, `.ogg` / `.oga` → `audio/ogg`, `.wav` / `.wave` → `audio/wav`). An extensionless or `blob:` URL is tried as-is. If every source has a type this browser refuses, nothing is fetched and the pill shows an error (`no-playable-source`). A later decode or network failure is reported too; it does not silently try the next file.
+
+`audio-src` on its own is unchanged. To offer more than one file, pick one of these (highest precedence first):
+
+1. The `audioSources` property (an array). Assign `null` to go back to the markup below.
+2. The `audio-sources` attribute: a JSON array of URLs or `{ "src", "type"? }` objects. When it is set, `audio-src` and `<source>` children are not used.
+3. `audio-src`, then direct `<source>` children, in that order.
+
+```html
+<!-- One file. The type is inferred from .mp3. -->
+<music-pill
+  spotify-url="https://open.spotify.com/track/TRACK_ID"
+  song-title="Song title"
+  artist="Artist name"
+  audio-src="/audio/licensed-song.mp3"
+></music-pill>
+
+<!-- Several files. The first type this browser can play is used. -->
+<music-pill spotify-url="https://open.spotify.com/track/TRACK_ID" song-title="Song title" artist="Artist name">
+  <source src="/audio/licensed-song.mp3" type="audio/mpeg">
+  <source src="/audio/licensed-song.m4a" type="audio/mp4">
+  <source src="/audio/licensed-song.ogg" type="audio/ogg">
+  <source src="/audio/licensed-song.wav" type="audio/wav">
+</music-pill>
+```
+
+```html
+<music-pill
+  spotify-url="https://open.spotify.com/track/TRACK_ID"
+  audio-sources='[{"src":"/audio/licensed-song.mp3","type":"audio/mpeg"},{"src":"/audio/licensed-song.ogg","type":"audio/ogg"}]'
+></music-pill>
+```
+
+```js
+pill.audioSources = [
+  { src: '/audio/licensed-song.mp3', type: 'audio/mpeg' },
+  { src: '/audio/licensed-song.ogg', type: 'audio/ogg' },
+];
+```
+
+A runnable demo of one source, several sources, and the error state is in [`examples/sources/`](examples/sources/index.html). It uses the generated test tone only. The [playground](playground/index.html) has the same three cases under **Sources**.
 
 ---
 
@@ -114,7 +166,8 @@ When you use `audio-src`:
 | `spotify-url` | **Required.** `https://open.spotify.com/track/<22-char id>` (`?si=` and `/intl-xx/` are stripped), or a `spotify:track:<id>` URI, which is normalised. Anything else hides the pill and emits `music-pill-error`. | none |
 | `song-title`, `artist` | Plain text. It is rendered as text, never as HTML. Control/bidi-override characters are stripped and it is capped at 200 characters. | none |
 | `artwork` | Image URL (`http(s)`, relative, `blob:`, or `data:image/…`). A broken image falls back to a neutral placeholder. | placeholder |
-| `audio-src` | Audio URL (`http(s)`, relative, `blob:`, or `data:audio/…`). If omitted, no audio work happens and there is no sound button. | none |
+| `audio-src` | One audio URL (`http(s)`, relative, `blob:`, or `data:audio/…`). If omitted, and there is no other source, no audio work happens and there is no sound button. | none |
+| `audio-sources` | JSON array of URLs or `{"src","type"?}` objects. Replaces `audio-src` and `<source>` children. `[]` means no audio. | none |
 | `position` | `top-left` `top-center` `top-right` `bottom-left` `bottom-center` `bottom-right` | `bottom-right` |
 | `size` | `sm` (48 px) `md` (56 px) `lg` (64 px) | `md` |
 | `theme` | `auto` `light` `dark` | `auto` |
@@ -125,9 +178,10 @@ When you use `audio-src`:
 
 Live changes: `position`, `size`, `theme`, `volume`, `fade-duration` and the
 metadata attributes update the existing pill **without restarting audio**.
-Changing `audio-src` or `spotify-url` is a song change. It stops and releases
-the old audio, cancels all of its pending work, and starts fresh. `autoplay` is
-read when a song loads.
+Changing `audio-src`, `audio-sources`, the `audioSources` property, a `<source>`
+child, or `spotify-url` is a song change. It stops and releases the old audio,
+cancels all of its pending work, and starts fresh. `autoplay` is read when a
+song loads. At most 12 sources are considered.
 
 ---
 
@@ -194,13 +248,17 @@ With `autoplay="attempt"`, the component makes **one** startup attempt:
 | Visitor muted earlier in this session | `muted` | none (no attempt is made) |
 | Another pill on the page already holds the audio slot | `idle` | none |
 
-When autoplay is blocked, the pill **stays silent and stays blocked**. It does not
-retry in a loop, simulate interaction, or attach page-wide click or scroll
-listeners, and it never starts sound after some unrelated click. Sound starts
-only from the sound button or your own control calling `enableSound()` inside
-a real user gesture. If a suspended context later starts on its own (some
-browsers resolve a pending `resume()` on the next click), the component
-re-suspends it, and the media is already paused.
+When autoplay is blocked, the pill stays silent and shows **Sound off**. It does
+not retry in a loop or pretend a gesture happened. The **next click or key
+press** anywhere on the page starts sound once (`play()` runs inside that
+gesture). Scrolling does not count, and neither does Tab or a modifier key on
+its own. After that one attempt, further clicks do not start sound again; the
+sound button (or `enableSound()`) still does. `autoplay="off"` never installs
+this listener. A remembered mute is never treated as permission to start.
+
+If a suspended context later starts on its own (some browsers resolve a pending
+`resume()` on the next click) while the pill is not meant to be playing, the
+component re-suspends it, and the media is already paused.
 
 **Activation timing.** `enableSound()` calls `HTMLMediaElement.play()` and
 `AudioContext.resume()` *synchronously* inside the gesture, before awaiting
@@ -219,7 +277,8 @@ the link:
 - It is a sibling of the link, never nested inside it. The link stays a normal link.
 - It has a hit area of at least 44 × 44 px and a visible focus ring.
 - Its name tells you what pressing it will do: **"Enable website sound"** or **"Mute website sound"**. When audio failed it is disabled, labelled **"Website sound unavailable"**.
-- The icon shows a speaker with waves only while sound is on. There is no "playing" animation or other indicator that could be false.
+- A separate status, next to the button and **not inside the Spotify link**, says **Loading audio**, **Playing**, **Muted**, **Paused**, **Sound off**, or the error. The link stays an "open in Spotify" action. Playing uses the speaker-with-waves icon, muted uses the crossed speaker, and paused uses a pause mark, so those states are not the same icon.
+- While audio is fetching or waiting to start, the button shows a spinner and `aria-busy`, and the status reads **Loading audio**.
 
 It exists because browsers usually require a gesture to start sound, and
 because continuously playing audio needs an independent way to stop it
@@ -266,18 +325,19 @@ const pill = document.querySelector('music-pill')!;
 pill.playbackState;          // 'none' | 'idle' | 'starting' | 'playing' | 'blocked' | 'muted' | 'paused' | 'error' (read-only)
 await pill.enableSound();    // true once audio is confirmed audible; call from a user gesture
 pill.mute();                 // prompt fade-out + pause, remembered for the session
+pill.audioSources;           // current source list; assign an array to override markup, or null to follow it
 ```
 
 | State | Meaning |
 | --- | --- |
 | `none` | No `audio-src` (link-only). |
 | `idle` | Audio is configured but not started (autoplay off, or another pill holds the audio). |
-| `starting` | A start attempt is in flight. Not audible yet. |
-| `playing` | The media is playing **and** the Web Audio graph is running. |
-| `blocked` | The browser refused to start sound without a gesture. |
-| `muted` | The visitor turned website sound off. |
-| `paused` | The page was hidden, another pill took over, or playback was interrupted (including a stall where media time stops advancing for 6 s). |
-| `error` | The audio could not be loaded or faded. The link still works. |
+| `starting` | A start attempt is in flight (fetch, decode, or `play()`). The status reads **Loading audio**. Not audible yet. |
+| `playing` | The media is playing **and** the Web Audio graph is running. The status reads **Playing**. |
+| `blocked` | The browser refused to start sound without a gesture. The status reads **Sound off**. The next click or key press starts it once. |
+| `muted` | The visitor turned website sound off. The status reads **Muted**. |
+| `paused` | The page was hidden, another pill took over, or playback was interrupted (including a stall where media time stops advancing for 6 s). The status reads **Paused**. |
+| `error` | No source can play, or the audio could not be loaded, decoded, or faded. The status is an alert with the message. The link still works. |
 
 ### Events
 
@@ -288,7 +348,7 @@ All events are `CustomEvent`s that **bubble** and are **composed**:
 | `music-pill-ready` | `{ spotifyUrl, hasAudio }`. The **UI** has rendered with a valid configuration. It says nothing about playback. |
 | `music-pill-statechange` | `{ state, previousState, reason }` |
 | `music-pill-autoplay-blocked` | `{ reason: 'play-rejected' \| 'context-suspended' }` |
-| `music-pill-error` | `{ code, message }`. `code` is one of `invalid-spotify-url`, `invalid-audio-src`, `audio-load-failed`, `fade-unavailable` or `restart-failed`. The message is generic: no raw browser error objects, URLs with credentials, or other private data. |
+| `music-pill-error` | `{ code, message }`. `code` is one of `invalid-spotify-url`, `invalid-audio-src`, `invalid-audio-sources`, `no-playable-source`, `audio-load-failed`, `audio-decode-failed`, `audio-unsupported`, `fade-unavailable`, or `restart-failed`. The message says which of those happened. It never includes raw browser error objects, URLs, or credentials. |
 
 ### Multiple pills
 
@@ -378,7 +438,7 @@ template (it uses `innerHTML` once, with a constant string).
 - Artwork has empty `alt`, because the adjacent text carries the same information. The Spotify icon is `aria-hidden`.
 - Long titles and artists truncate visually with an ellipsis. The full text stays in the accessible name and in a hover tooltip.
 - Tab order: link, then sound button. There is a visible `:focus-visible` ring, and forced-colours (Windows High Contrast) styling.
-- No decorative motion. Hover transitions are disabled under `prefers-reduced-motion`.
+- No decorative motion. Under `prefers-reduced-motion: reduce`, hover transitions are removed and the loading spinner does not spin (it stays a static ring). **Audio fades still run**, because they are the loudness envelope, not UI motion. Set `fade-duration="0"` if you want the level change to be instant as well.
 - The pill grows rather than clips when text is enlarged or zoomed, and stays within a 320 px viewport.
 
 ---
@@ -399,7 +459,9 @@ music-pill::part(title) { letter-spacing: 0; }
 ```
 
 Stable parts: `container`, `pill` (the link), `artwork`, `title`, `artist`,
-`attribution` (the Spotify icon), `sound-button`.
+`attribution` (the Spotify icon), `sound-button`, `status`.
+
+`--music-pill-danger` colours the error status (default `#9f1239`, or `#ffb4ab` in the dark theme).
 
 **Contrast is your responsibility** when you override colours. Text needs at
 least 4.5:1 against the background. The [playground](playground/index.html)
@@ -631,7 +693,7 @@ has its own autoplay, audio-session and background rules.
 ### Manual device checklist (iOS / Android)
 
 1. `npm run build && node scripts/serve.mjs --port 4391`, then expose it over HTTPS on your LAN (for example `npx localtunnel --port 4391`, or your own tunnel) and open `/playground/` on the device.
-2. **Tone mode:** on first load, confirm that nothing plays and the button reads "Enable website sound". Tap it: you should hear a fade-in within about 2 s, and the button should read "Mute website sound".
+2. **Tone mode:** on first load, confirm that nothing plays, the button reads "Enable website sound", and the status reads "Sound off". Tap anywhere on the page, or tap the button: you should hear a fade-in within about 2 s, the button should read "Mute website sound", and the status should read "Playing".
 3. Wait for at least two loops of the 1 s fixture. You should hear fade-out, a brief gap, and fade-in, without clicks.
 4. Tap mute: silence within about 0.1 s. Reload: it stays muted.
 5. With sound on, lock the screen or switch apps: audio stops. Return: it resumes or reports blocked, and never plays while hidden.

@@ -63,6 +63,8 @@
     }
     const count = Number(params.get('count') ?? 1);
     params.delete('count');
+    const sources = params.get('sources');
+    params.delete('sources');
     for (let i = 0; i < count; i++) {
       const el = document.createElement('music-pill');
       el.id = `pill-${i}`;
@@ -70,6 +72,14 @@
       el.setAttribute('song-title', 'Test tone (generated fixture)');
       el.setAttribute('artist', 'Not a Spotify recording');
       for (const [k, v] of params) el.setAttribute(k, v);
+      if (sources) {
+        for (const item of JSON.parse(sources)) {
+          const source = document.createElement('source');
+          source.setAttribute('src', item.src);
+          if (item.type) source.setAttribute('type', item.type);
+          el.append(source);
+        }
+      }
       if (i > 0) el.setAttribute('position', 'top-right');
       document.body.append(el);
     }

@@ -150,7 +150,7 @@ describe('AudioEngine startup', () => {
     expect(media.playCalls).toBe(0);
   });
 
-  it('reports a load failure from the media error event once', async () => {
+  it('reports an unsupported media error once', async () => {
     const { engine, media, log } = setup();
     media.nextPlay = 'pending';
     engine.begin(true);
@@ -158,7 +158,30 @@ describe('AudioEngine startup', () => {
     media.fail();
     await flush();
     expect(engine.state).toBe('error');
-    expect(log.errors).toEqual(['audio-load-failed']);
+    expect(log.errors).toEqual(['audio-unsupported']);
+  });
+
+  it('distinguishes a decode failure from a network failure', () => {
+    const decode = setup();
+    decode.media.error = { code: 3 };
+    decode.media.dispatchEvent(new Event('error'));
+    expect(decode.engine.state).toBe('error');
+    expect(decode.log.errors).toEqual(['audio-decode-failed']);
+
+    const network = setup();
+    network.media.error = { code: 2 };
+    network.media.dispatchEvent(new Event('error'));
+    expect(network.log.errors).toEqual(['audio-load-failed']);
+  });
+
+  it('reports NotSupportedError from play() as an unsupported source', async () => {
+    const { engine, media, log } = setup();
+    media.nextPlay = 'reject-not-supported';
+    engine.begin(true);
+    await flush();
+    expect(engine.state).toBe('error');
+    expect(log.errors).toEqual(['audio-unsupported']);
+    expect(media.playCalls).toBe(1);
   });
 });
 

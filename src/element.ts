@@ -3,7 +3,14 @@
 // module never evaluates HTMLElement.
 
 import { AudioEngine } from './audio-engine.js';
-import { PLACEHOLDER_ICON, SOUND_OFF_ICON, SOUND_ON_ICON, SPOTIFY_ICON } from './icons.js';
+import {
+  PLACEHOLDER_ICON,
+  SOUND_ERROR_ICON,
+  SOUND_OFF_ICON,
+  SOUND_ON_ICON,
+  SOUND_PAUSE_ICON,
+  SPOTIFY_ICON,
+} from './icons.js';
 import {
   isSpotifyArtworkHost,
   normalizeSpotifyTrackUrl,
@@ -18,8 +25,19 @@ import {
   sanitizeText,
 } from './parse.js';
 import type { AudioCoordinator, SoundPreference } from './session.js';
+import {
+  DROPPED_AUDIO_SOURCE_MESSAGE,
+  INVALID_AUDIO_SOURCES_MESSAGE,
+  INVALID_AUDIO_SRC_MESSAGE,
+  MAX_AUDIO_SOURCES,
+  NO_PLAYABLE_SOURCE_MESSAGE,
+  parseAudioSourcesAttribute,
+  selectAudioSource,
+  type AudioSourceSelection,
+} from './sources.js';
 import { STYLES } from './styles.js';
 import type {
+  MusicPillAudioSource,
   MusicPillElement,
   MusicPillElementConstructor,
   MusicPillErrorCode,
@@ -34,6 +52,7 @@ export const OBSERVED_ATTRIBUTES = [
   'artist',
   'artwork',
   'audio-src',
+  'audio-sources',
   'position',
   'size',
   'theme',
@@ -60,7 +79,8 @@ const TEMPLATE = `
     ${SPOTIFY_ICON}
   </a>
   <span class="sep" aria-hidden="true" hidden></span>
-  <button class="sound" part="sound-button" type="button" hidden>${SOUND_OFF_ICON}${SOUND_ON_ICON}</button>
+  <button class="sound" part="sound-button" type="button" hidden>${SOUND_OFF_ICON}${SOUND_ON_ICON}${SOUND_PAUSE_ICON}${SOUND_ERROR_ICON}<span class="spinner" hidden aria-hidden="true"></span></button>
+  <span class="status" id="status" part="status" role="status" hidden></span>
 </div>`;
 
 type Parts = {
@@ -74,8 +94,19 @@ type Parts = {
   artist: HTMLSpanElement;
   sep: HTMLSpanElement;
   sound: HTMLButtonElement;
+  status: HTMLSpanElement;
+  spinner: HTMLSpanElement;
   iconOn: SVGElement;
   iconOff: SVGElement;
+  iconPause: SVGElement;
+  iconError: SVGElement;
+};
+
+type CollectedSources = {
+  sources: MusicPillAudioSource[];
+  /** Stable identity of the configured list, including invalid attribute text. */
+  signature: string;
+  invalidAttribute: boolean;
 };
 
 let sheetCache: CSSStyleSheet | null | undefined;
@@ -89,6 +120,18 @@ function sharedSheet(): CSSStyleSheet | null {
     sheetCache = null;
   }
   return sheetCache;
+}
+
+function sourceSignature(sources: readonly MusicPillAudioSource[]): string {
+  return sources.map((source) => `${source.src}\0${source.type ?? ''}`).join('\n');
+}
+
+function cloneSource(source: MusicPillAudioSource): MusicPillAudioSource | null {
+  if (!source || typeof source.src !== 'string') return null;
+  const src = source.src.trim();
+  if (!src) return null;
+  const type = typeof source.type === 'string' && source.type.trim() ? source.type.trim() : undefined;
+  return type ? { src, type } : { src };
 }
 
 export function createMusicPillClass(shared: SharedState): MusicPillElementConstructor {
@@ -105,7 +148,16 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
     #artHref: string | null = null;
     #artToken = 0;
     #invalidReported: string | null = null;
-    #invalidAudioReported: string | null = null;
+    /** Set when selection failed before an engine exists, so playbackState is `error`. */
+    #configError = false;
+    #statusText: string | null = null;
+    /** When non-null, replaces audio-src, audio-sources, and <source> children. */
+    #sourceOverride: MusicPillAudioSource[] | null = null;
+    #sourcesObserver: MutationObserver | null = null;
+    #probe: HTMLAudioElement | null = null;
+    #gestureAbort: AbortController | null = null;
+    /** The one automatic gesture unlock has already been used for this song. */
+    #gestureUsed = false;
 
     constructor() {
       super();
@@ -134,15 +186,41 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
         artist: q('.artist'),
         sep: q('.sep'),
         sound: q('.sound'),
+        status: q('.status'),
+        spinner: q('.spinner'),
         iconOn: q('[data-icon="on"]'),
         iconOff: q('[data-icon="off"]'),
+        iconPause: q('[data-icon="pause"]'),
+        iconError: q('[data-icon="error"]'),
       };
       this.#p.sound.addEventListener('click', () => this.#onSoundClick());
-      this.#updateSoundButton('none');
+      this.#syncChrome('none');
     }
 
     get playbackState(): PlaybackState {
-      return this.#engine?.state ?? 'none';
+      if (this.#engine) return this.#engine.state;
+      if (this.#configError) return 'error';
+      return 'none';
+    }
+
+    get audioSources(): readonly MusicPillAudioSource[] {
+      return this.#collectSources().sources.map((source) => ({ ...source }));
+    }
+
+    set audioSources(value: readonly MusicPillAudioSource[] | null) {
+      if (value == null) {
+        this.#sourceOverride = null;
+      } else {
+        const next: MusicPillAudioSource[] = [];
+        for (const item of value) {
+          const source = cloneSource(item);
+          if (!source) continue;
+          next.push(source);
+          if (next.length >= MAX_AUDIO_SOURCES) break;
+        }
+        this.#sourceOverride = next;
+      }
+      this.#queueRender();
     }
 
     enableSound(): Promise<boolean> {
@@ -158,14 +236,22 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
     }
 
     connectedCallback(): void {
+      this.#observeSources();
       this.#queueRender();
     }
 
     disconnectedCallback(): void {
       // Defer teardown: a synchronous move (remove + insert, as frameworks do
       // when reordering) reconnects before this runs and keeps audio intact.
+      this.#disarmGestureUnlock();
       queueMicrotask(() => {
-        if (!this.isConnected) this.#teardownAudio(false);
+        if (this.isConnected) {
+          if (this.playbackState === 'blocked') this.#armGestureUnlock();
+          return;
+        }
+        this.#sourcesObserver?.disconnect();
+        this.#sourcesObserver = null;
+        this.#teardownAudio(false);
       });
     }
 
@@ -174,6 +260,68 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
     }
 
     // -------------------------------------------------------------------------
+
+    #observeSources(): void {
+      if (this.#sourcesObserver) return;
+      this.#sourcesObserver = new MutationObserver(() => this.#queueRender());
+      // Light-DOM <source> children only. The shadow tree is a separate root,
+      // so this does not observe the component's own markup.
+      this.#sourcesObserver.observe(this, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['src', 'type'],
+      });
+    }
+
+    #canPlay(mime: string): string {
+      try {
+        this.#probe ??= this.ownerDocument.createElement('audio');
+        return this.#probe.canPlayType(mime) ?? '';
+      } catch {
+        return '';
+      }
+    }
+
+    /**
+     * Source list, highest precedence first:
+     * 1. `audioSources` property, when assigned (including an empty array)
+     * 2. `audio-sources` attribute, when non-blank
+     * 3. `audio-src`, then direct `<source>` children
+     */
+    #collectSources(): CollectedSources {
+      if (this.#sourceOverride) {
+        const sources = this.#sourceOverride.map((source) => ({ ...source }));
+        return { sources, signature: `override\0${sourceSignature(sources)}`, invalidAttribute: false };
+      }
+      const attr = this.getAttribute('audio-sources');
+      if (attr !== null && attr.trim() !== '') {
+        const parsed = parseAudioSourcesAttribute(attr);
+        if (!parsed.ok) return { sources: [], signature: `invalid-attribute\0${attr}`, invalidAttribute: true };
+        return {
+          sources: parsed.sources,
+          signature: `attribute\0${sourceSignature(parsed.sources)}`,
+          invalidAttribute: false,
+        };
+      }
+      const sources: MusicPillAudioSource[] = [];
+      const single = this.getAttribute('audio-src');
+      if (single && single.trim()) sources.push({ src: single.trim() });
+      for (const child of this.children) {
+        if (child.localName !== 'source') continue;
+        const src = child.getAttribute('src');
+        if (!src || !src.trim()) continue;
+        const type = child.getAttribute('type');
+        sources.push(type && type.trim() ? { src: src.trim(), type: type.trim() } : { src: src.trim() });
+        if (sources.length >= MAX_AUDIO_SOURCES) break;
+      }
+      return { sources, signature: `inline\0${sourceSignature(sources)}`, invalidAttribute: false };
+    }
+
+    #selectSources(collected: CollectedSources): AudioSourceSelection {
+      if (collected.invalidAttribute) return { status: 'invalid' };
+      return selectAudioSource(collected.sources, this.ownerDocument.baseURI, (mime) => this.#canPlay(mime));
+    }
 
     #queueRender(): void {
       if (this.#renderQueued) return;
@@ -197,6 +345,10 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
         p.link.removeAttribute('href');
         this.#teardownAudio(true);
         this.#songKey = null;
+        p.sound.hidden = true;
+        p.sep.hidden = true;
+        delete p.root.dataset.sound;
+        this.#syncChrome('none');
         const key = rawUrl ?? '';
         if (this.#invalidReported !== key) {
           this.#invalidReported = key;
@@ -217,20 +369,10 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
       this.#renderText();
       this.#renderArtwork();
 
-      // Audio.
-      const base = this.ownerDocument.baseURI;
-      const rawAudio = this.getAttribute('audio-src');
-      const audio = resolveResourceUrl(rawAudio, base, 'audio/');
-      if (rawAudio && rawAudio.trim() && !audio) {
-        if (this.#invalidAudioReported !== rawAudio) {
-          this.#invalidAudioReported = rawAudio;
-          this.#emitError('invalid-audio-src', 'audio-src must be an http(s), blob: or data:audio/ URL.');
-        }
-      } else {
-        this.#invalidAudioReported = null;
-      }
+      const collected = this.#collectSources();
+      const selection = this.#selectSources(collected);
       const builtInControl = parseSoundControl(this.getAttribute('sound-control')) === 'built-in';
-      const showButton = Boolean(audio) && builtInControl;
+      const showButton = (selection.status === 'selected' || selection.status === 'none-playable') && builtInControl;
       p.sound.hidden = !showButton;
       p.sep.hidden = !showButton;
       if (showButton) p.root.dataset.sound = '';
@@ -240,45 +382,92 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
         volume: parseVolume(this.getAttribute('volume')),
         fade: parseFadeDuration(this.getAttribute('fade-duration')),
       };
-      const songKey = `${spotifyUrl}\n${audio?.href ?? ''}`;
+      const songKey = `${spotifyUrl}\0${collected.signature}`;
       p.root.hidden = false;
 
-      if (songKey === this.#songKey && (this.#engine || !audio)) {
+      if (songKey === this.#songKey) {
         this.#engine?.update(settings);
+        this.#syncChrome(this.playbackState);
         return;
       }
 
-      // The song changed (or this is the first render): invalidate all audio
-      // work belonging to the previous song before starting anything new.
+      this.#installAudio(
+        spotifyUrl,
+        selection,
+        collected.invalidAttribute,
+        settings,
+        parseAutoplay(this.getAttribute('autoplay')) === 'attempt',
+        songKey,
+      );
+    }
+
+    #installAudio(
+      spotifyUrl: string,
+      selection: AudioSourceSelection,
+      invalidAttribute: boolean,
+      settings: { volume: number; fade: number },
+      autoplay: boolean,
+      songKey: string,
+    ): void {
       const hadEngine = this.#teardownAudio(true);
+      this.#gestureUsed = false;
       this.#songKey = songKey;
-      if (audio) {
-        const el = this.ownerDocument.createElement('audio');
-        el.hidden = true;
-        this.#shadow.append(el);
-        this.#engine = new AudioEngine(
-          el,
-          audio,
-          settings,
-          {
-            doc: this.ownerDocument,
-            prefs: shared.prefs,
-            coordinator: shared.coordinator,
-            createContext: shared.createContext,
-          },
-          {
-            onState: (state, previous, reason) => this.#onEngineState(state, previous, reason),
-            onAutoplayBlocked: (reason) => this.#emit('music-pill-autoplay-blocked', { reason }),
-            onError: (code, message) => this.#emitError(code, message),
-          },
-        );
+      const previous: PlaybackState = hadEngine ?? 'none';
+
+      if (selection.status === 'empty' || selection.status === 'invalid') {
+        this.#syncChrome('none');
+        if (selection.status === 'invalid') {
+          this.#emitError(
+            invalidAttribute ? 'invalid-audio-sources' : 'invalid-audio-src',
+            invalidAttribute ? INVALID_AUDIO_SOURCES_MESSAGE : INVALID_AUDIO_SRC_MESSAGE,
+          );
+        }
+        this.#emit('music-pill-ready', { spotifyUrl, hasAudio: false });
+        if (hadEngine) {
+          this.#emit('music-pill-statechange', { state: 'none', previousState: hadEngine, reason: 'source-changed' });
+        }
+        return;
       }
-      this.#updateSoundButton(this.playbackState);
-      this.#emit('music-pill-ready', { spotifyUrl, hasAudio: Boolean(audio) });
-      if (hadEngine && !audio) {
-        this.#emit('music-pill-statechange', { state: 'none', previousState: hadEngine, reason: 'source-changed' });
+
+      if (selection.status === 'none-playable') {
+        this.#configError = true;
+        this.#statusText = NO_PLAYABLE_SOURCE_MESSAGE;
+        this.#syncChrome('error');
+        this.#emitError('no-playable-source', NO_PLAYABLE_SOURCE_MESSAGE);
+        this.#emit('music-pill-ready', { spotifyUrl, hasAudio: true });
+        this.#emit('music-pill-statechange', { state: 'error', previousState: previous, reason: 'error' });
+        return;
       }
-      this.#engine?.begin(parseAutoplay(this.getAttribute('autoplay')) === 'attempt');
+
+      if (selection.droppedInvalid > 0) {
+        this.#emitError('invalid-audio-src', DROPPED_AUDIO_SOURCE_MESSAGE);
+      }
+      const el = this.ownerDocument.createElement('audio');
+      el.hidden = true;
+      this.#shadow.append(el);
+      this.#engine = new AudioEngine(
+        el,
+        selection.source,
+        settings,
+        {
+          doc: this.ownerDocument,
+          prefs: shared.prefs,
+          coordinator: shared.coordinator,
+          createContext: shared.createContext,
+        },
+        {
+          onState: (state, prev, reason) => this.#onEngineState(state, prev, reason),
+          onAutoplayBlocked: (reason) => this.#emit('music-pill-autoplay-blocked', { reason }),
+          onError: (code, message) => {
+            this.#statusText = message;
+            this.#syncChrome(this.playbackState);
+            this.#emitError(code, message);
+          },
+        },
+      );
+      this.#syncChrome(this.playbackState);
+      this.#emit('music-pill-ready', { spotifyUrl, hasAudio: true });
+      this.#engine.begin(autoplay);
     }
 
     #renderText(): void {
@@ -335,6 +524,9 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
 
     /** Stops and releases audio. Returns the previous state if an engine existed. */
     #teardownAudio(sourceChanged: boolean): PlaybackState | null {
+      this.#configError = false;
+      this.#statusText = null;
+      this.#disarmGestureUnlock();
       const engine = this.#engine;
       if (!engine) {
         if (!sourceChanged) this.#songKey = null;
@@ -345,7 +537,7 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
       engine.destroy();
       engine.audio.remove();
       if (!sourceChanged) this.#songKey = null; // reconnecting starts fresh
-      this.#updateSoundButton('none');
+      this.#syncChrome('none');
       return previous;
     }
 
@@ -357,21 +549,105 @@ export function createMusicPillClass(shared: SharedState): MusicPillElementConst
       else void engine.enableSound();
     }
 
+    /**
+     * After autoplay is blocked, the next click or key press on the page starts
+     * sound once. play() runs synchronously inside that gesture. Scrolls do
+     * not count, and the sound button is left to its own handler so a click
+     * there cannot both start and immediately mute.
+     */
+    #armGestureUnlock(): void {
+      if (this.#gestureAbort || this.#gestureUsed || !this.isConnected) return;
+      const abort = new AbortController();
+      this.#gestureAbort = abort;
+      const options = { signal: abort.signal };
+      this.ownerDocument.addEventListener('click', (event) => this.#onGesture(event), options);
+      this.ownerDocument.addEventListener('keydown', (event) => this.#onGesture(event), options);
+    }
+
+    #disarmGestureUnlock(): void {
+      this.#gestureAbort?.abort();
+      this.#gestureAbort = null;
+    }
+
+    #onGesture(event: Event): void {
+      if (this.#gestureUsed) return;
+      if (event.type === 'keydown') {
+        const key = (event as KeyboardEvent).key;
+        if (key === 'Tab' || key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta' || key === 'Escape' || key === 'CapsLock') {
+          return;
+        }
+      }
+      if (event.composedPath().includes(this.#p.sound)) return;
+      const engine = this.#engine;
+      if (!engine || engine.state !== 'blocked') {
+        this.#disarmGestureUnlock();
+        return;
+      }
+      this.#gestureUsed = true;
+      this.#disarmGestureUnlock();
+      void engine.enableSound();
+    }
+
     #onEngineState(state: PlaybackState, previous: PlaybackState, reason: StateChangeReason): void {
-      this.#updateSoundButton(state);
+      if (state !== 'error') this.#statusText = null;
+      this.#syncChrome(state);
+      if (state === 'blocked') this.#armGestureUnlock();
+      else this.#disarmGestureUnlock();
       this.#emit('music-pill-statechange', { state, previousState: previous, reason });
     }
 
-    #updateSoundButton(state: PlaybackState): void {
-      const { sound, iconOn, iconOff } = this.#p;
-      const on = state === 'playing' || state === 'starting';
-      sound.disabled = state === 'error';
+    #statusFor(state: PlaybackState): string | null {
+      switch (state) {
+        case 'starting':
+          return 'Loading audio';
+        case 'playing':
+          return 'Playing';
+        case 'muted':
+          return 'Muted';
+        case 'paused':
+          return 'Paused';
+        case 'blocked':
+          return 'Sound off';
+        case 'error':
+          return this.#statusText ?? 'Audio unavailable';
+        default:
+          return null;
+      }
+    }
+
+    #syncChrome(state: PlaybackState): void {
+      const { root, sound, status, spinner, iconOn, iconOff, iconPause, iconError } = this.#p;
+      root.dataset.playback = state;
+      const audible = state === 'playing' || state === 'starting';
+      const showPause = state === 'paused';
+      const showError = state === 'error';
+      sound.disabled = showError;
+      if (state === 'starting') sound.setAttribute('aria-busy', 'true');
+      else sound.removeAttribute('aria-busy');
       sound.setAttribute(
         'aria-label',
-        state === 'error' ? 'Website sound unavailable' : on ? 'Mute website sound' : 'Enable website sound',
+        showError ? 'Website sound unavailable' : audible ? 'Mute website sound' : 'Enable website sound',
       );
-      iconOn.toggleAttribute('hidden', !on);
-      iconOff.toggleAttribute('hidden', on);
+      if (showError || state === 'none' || state === 'idle') sound.removeAttribute('aria-pressed');
+      else sound.setAttribute('aria-pressed', audible ? 'true' : 'false');
+      iconOn.toggleAttribute('hidden', state !== 'playing');
+      iconOff.toggleAttribute('hidden', audible || showPause || showError);
+      iconPause.toggleAttribute('hidden', !showPause);
+      iconError.toggleAttribute('hidden', !showError);
+      spinner.toggleAttribute('hidden', state !== 'starting');
+
+      const text = this.#statusFor(state);
+      if (text) {
+        status.hidden = false;
+        status.textContent = text;
+        status.setAttribute('role', showError ? 'alert' : 'status');
+        sound.setAttribute('aria-describedby', 'status');
+      } else {
+        status.hidden = true;
+        status.textContent = '';
+        status.setAttribute('role', 'status');
+        sound.removeAttribute('aria-describedby');
+      }
     }
 
     #emitError(code: MusicPillErrorCode, message: string): void {

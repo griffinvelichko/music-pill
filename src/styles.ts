@@ -20,6 +20,7 @@ export const STYLES = /* css */ `
   --_secondary: var(--music-pill-secondary, #5f5f64);
   --_border: var(--music-pill-border, rgb(0 0 0 / 0.1));
   --_focus: var(--music-pill-focus-ring, #0066cc);
+  --_danger: var(--music-pill-danger, #9f1239);
   --_hover: color-mix(in srgb, var(--_fg) 6%, transparent);
   --_placeholder-bg: color-mix(in srgb, var(--_fg) 8%, transparent);
   --_shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 6px 20px rgb(0 0 0 / 0.1);
@@ -68,6 +69,7 @@ export const STYLES = /* css */ `
   --_secondary: var(--music-pill-secondary, #b0b0b6);
   --_border: var(--music-pill-border, rgb(255 255 255 / 0.12));
   --_focus: var(--music-pill-focus-ring, #5eb1ff);
+  --_danger: var(--music-pill-danger, #ffb4ab);
   --_shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
 }
 @media (prefers-color-scheme: dark) {
@@ -77,6 +79,7 @@ export const STYLES = /* css */ `
     --_secondary: var(--music-pill-secondary, #b0b0b6);
     --_border: var(--music-pill-border, rgb(255 255 255 / 0.12));
     --_focus: var(--music-pill-focus-ring, #5eb1ff);
+    --_danger: var(--music-pill-danger, #ffb4ab);
     --_shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
   }
 }
@@ -228,6 +231,10 @@ export const STYLES = /* css */ `
   cursor: default;
   opacity: 0.45;
 }
+.root[data-playback="error"] .sound:disabled {
+  opacity: 1;
+  color: var(--_danger);
+}
 .sound svg {
   width: 20px;
   height: 20px;
@@ -241,8 +248,42 @@ export const STYLES = /* css */ `
   fill: currentColor;
   stroke: none;
 }
+/* Loading spinner. A static ring under prefers-reduced-motion (below). */
+.spinner {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: music-pill-spin 0.8s linear infinite;
+}
+@keyframes music-pill-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Playback status. Sibling of the link, never inside it. */
+.status {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 14rem;
+  margin: 0;
+  padding: 0 12px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--_secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.root[data-playback="error"] .status {
+  color: var(--_danger);
+}
+
 /* Author display values would otherwise override the hidden attribute. */
-.sound[hidden], .sep[hidden], .sound [hidden] {
+.sound[hidden], .sep[hidden], .status[hidden], .sound [hidden] {
   display: none;
 }
 
@@ -256,12 +297,19 @@ export const STYLES = /* css */ `
 
 @media (prefers-reduced-motion: reduce) {
   .pill, .sound { transition: none; }
+  /* The spinner stops. Audio fade ramps are not visual motion and still run. */
+  .spinner {
+    animation: none;
+    border-inline-end-color: currentColor;
+    opacity: 0.55;
+  }
 }
 
 @media (forced-colors: active) {
   .root { border-color: CanvasText; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .sep { background: CanvasText; }
   .mark { fill: CanvasText; }
+  .status, .root[data-playback="error"] .status, .root[data-playback="error"] .sound { color: CanvasText; }
   .pill:focus-visible, .sound:focus-visible { outline-color: Highlight; }
 }
 `;
