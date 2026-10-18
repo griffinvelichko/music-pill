@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Multiple audio sources. `audio-src` still plays one file. Direct `<source>`
+  children, an `audio-sources` JSON attribute, or the `audioSources` property
+  can list MP3, M4A/AAC, OGG, and WAV. The first source the browser can play
+  is used: an explicit MIME type, otherwise the extension, checked with
+  `canPlayType`.
+- Loading and error UI next to the sound button (never inside the Spotify
+  link): **Loading audio**, and an alert when audio cannot be played, loaded,
+  or decoded. New error codes: `no-playable-source`, `invalid-audio-sources`,
+  `audio-decode-failed`, and `audio-unsupported`.
+- When autoplay is blocked, the next click or key press on the page starts
+  sound once. Scrolling does not. The status tells playing, muted, paused,
+  and sound off apart, including for screen readers.
+- `prefers-reduced-motion` removes UI transitions and stops the loading
+  spinner. Audio fade-in and fade-out are unchanged.
+- `examples/sources/` and a playground **Sources** tab, using the generated
+  test tone, for one source, several sources, and the unplayable-type error.
+
+### Changed
+
+- Media failures now say whether the file could not be fetched, decoded, or
+  played. `audio-load-failed` remains the network and generic code.
+
 ## [0.1.0] - 2026-10-17
 
 First version. Not yet published to npm.

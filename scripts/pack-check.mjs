@@ -63,6 +63,7 @@ import { resolveSpotifyMetadata, type SpotifyOEmbedMetadata } from 'music-pill/r
 const ctor = registerMusicPill();
 const el: MusicPillElement | null = document.querySelector('music-pill');
 const state: PlaybackState | undefined = el?.playbackState;
+if (el) el.audioSources = [{ src: '/audio/licensed-song.mp3', type: 'audio/mpeg' }];
 el?.addEventListener('music-pill-statechange', (e) => { const s: PlaybackState = e.detail.state; void s; });
 el?.addEventListener('music-pill-error', (e) => { const c: string = e.detail.code; void c; });
 void el?.enableSound();

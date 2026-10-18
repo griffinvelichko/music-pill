@@ -8,27 +8,34 @@ const pill = $('pill');
 const FIXTURE_TRACK = 'https://open.spotify.com/track/MusicPillTestFixture00';
 const DEFAULTS = { position: 'bottom-right', size: 'md', theme: 'auto', autoplay: 'attempt', volume: '0.25', 'fade-duration': '1.5' };
 let mode = 'track';
+let scenario = 'single';
 
 // ---- tabs ---------------------------------------------------------------
+const TABS = [
+  ['tab-track', 'track', 'mode-track'],
+  ['tab-tone', 'tone', 'mode-tone'],
+  ['tab-sources', 'sources', 'mode-sources'],
+];
 for (const tab of document.querySelectorAll('[role="tab"]')) {
-  tab.addEventListener('click', () => setMode(tab.id === 'tab-tone' ? 'tone' : 'track'));
+  tab.addEventListener('click', () => setMode(tab.id.replace('tab-', '')));
   tab.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      const next = tab.id === 'tab-track' ? $('tab-tone') : $('tab-track');
-      next.focus();
-      next.click();
-    }
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const ids = TABS.map(([id]) => id);
+    const index = ids.indexOf(tab.id);
+    const next = $(ids[(index + (e.key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length]);
+    next.focus();
+    next.click();
   });
 }
 function setMode(next) {
   mode = next;
-  $('tab-track').setAttribute('aria-selected', String(mode === 'track'));
-  $('tab-tone').setAttribute('aria-selected', String(mode === 'tone'));
-  $('tab-track').tabIndex = mode === 'track' ? 0 : -1;
-  $('tab-tone').tabIndex = mode === 'tone' ? 0 : -1;
-  $('mode-track').hidden = mode !== 'track';
-  $('mode-tone').hidden = mode !== 'tone';
-  $('snippet-panel').hidden = mode !== 'track';
+  for (const [id, name, panel] of TABS) {
+    const selected = mode === name;
+    $(id).setAttribute('aria-selected', String(selected));
+    $(id).tabIndex = selected ? 0 : -1;
+    $(panel).hidden = !selected;
+  }
+  $('snippet-panel').hidden = mode === 'tone';
   apply();
 }
 
@@ -149,19 +156,89 @@ function attrsFromForm() {
   };
 }
 
-function apply() {
-  const attrs = attrsFromForm();
-  for (const [name, value] of Object.entries(attrs)) {
-    if (value === '') pill.removeAttribute(name);
-    else pill.setAttribute(name, value);
+function clearPillSources() {
+  pill.audioSources = null;
+  pill.removeAttribute('audio-sources');
+  for (const child of [...pill.querySelectorAll('source')]) child.remove();
+}
+
+const SOURCE_NOTES = {
+  single: 'One audio-src, the generated WAV. A site would point this at an MP3 (or any single file) it has the rights to play.',
+  multi: 'The first <source> uses a type the browser cannot play, so it is skipped. The generated WAV is the file that plays. List MP3, M4A, OGG, and WAV of the same recording on a real site.',
+  error: 'The only source declares a type the browser rejects. The pill shows an error and does not fetch the file. The link still only opens Spotify.',
+};
+
+function applySources(colours) {
+  const attrs = {
+    'spotify-url': FIXTURE_TRACK,
+    'song-title': scenario === 'error' ? 'Unplayable source' : scenario === 'multi' ? 'Several sources' : 'Single source',
+    artist: 'Generated tone, not a Spotify recording',
+    artwork: '/fixtures/artwork/tone-art.svg',
+    autoplay: 'off',
+    position: $('position').value,
+    size: $('size').value,
+    theme: $('theme').value,
+  };
+  for (const name of ['spotify-url', 'song-title', 'artist', 'artwork', 'audio-src', 'autoplay', 'volume', 'fade-duration', 'position', 'size', 'theme']) {
+    pill.removeAttribute(name);
   }
+  for (const [name, value] of Object.entries(attrs)) pill.setAttribute(name, value);
+  if (scenario === 'single') {
+    pill.setAttribute('audio-src', '/fixtures/audio/test-tone.wav');
+  } else if (scenario === 'multi') {
+    pill.insertAdjacentHTML(
+      'beforeend',
+      '<source src="/fixtures/audio/does-not-exist.mp3" type="audio/x-music-pill-unsupported"><source src="/fixtures/audio/test-tone.wav" type="audio/wav">',
+    );
+  } else {
+    pill.insertAdjacentHTML(
+      'beforeend',
+      '<source src="/fixtures/audio/test-tone.wav" type="audio/x-music-pill-unsupported">',
+    );
+  }
+  $('scenario-note').textContent = SOURCE_NOTES[scenario];
+  $('copy').disabled = false;
+  const lines = {
+    single: `<music-pill
+  spotify-url="https://open.spotify.com/track/TRACK_ID"
+  song-title="Song title"
+  artist="Artist name"
+  audio-src="/audio/licensed-song.mp3"
+></music-pill>`,
+    multi: `<music-pill spotify-url="https://open.spotify.com/track/TRACK_ID" song-title="Song title" artist="Artist name">
+  <source src="/audio/licensed-song.mp3" type="audio/mpeg">
+  <source src="/audio/licensed-song.m4a" type="audio/mp4">
+  <source src="/audio/licensed-song.ogg" type="audio/ogg">
+  <source src="/audio/licensed-song.wav" type="audio/wav">
+</music-pill>`,
+    error: `<music-pill spotify-url="https://open.spotify.com/track/TRACK_ID" song-title="Song title" artist="Artist name">
+  <source src="/audio/licensed-song.mp3" type="audio/mpeg">
+</music-pill>
+<!-- If this browser cannot play that type, the pill reports no-playable-source. -->`,
+  };
+  $('snippet').textContent = lines[scenario];
+  void colours;
+}
+
+function apply() {
+  clearPillSources();
   const colours = colourOverrides();
   for (const [, , prop] of colourPairs) {
     if (colours[prop]) pill.style.setProperty(prop, colours[prop]);
     else pill.style.removeProperty(prop);
   }
+  if (mode === 'sources') {
+    $('audio-warn').textContent = '';
+    applySources(colours);
+    return;
+  }
+  const attrs = attrsFromForm();
+  for (const [name, value] of Object.entries(attrs)) {
+    if (value === '') pill.removeAttribute(name);
+    else pill.setAttribute(name, value);
+  }
   $('audio-warn').textContent = attrs['audio-src'] && mode === 'track'
-    ? 'Only use audio you are licensed to play on a website, and make sure it is the same recording as the Spotify link and the title/artist above. A Spotify link grants no audio rights.'
+    ? 'Only use audio you are licensed to play on a website, and make sure it is the same recording as the Spotify link and the title/artist above. You are responsible for the rights to the song you display and the audio you attach. A Spotify link grants no audio rights.'
     : '';
   if (mode === 'track') renderSnippet(attrs, colours);
 }
@@ -207,6 +284,15 @@ $('copy').addEventListener('click', async () => {
 
 for (const el of document.querySelectorAll('#mode-track input, #mode-track select, #mode-tone input, #mode-tone select, #position, #size, #theme')) {
   el.addEventListener('input', apply);
+}
+for (const id of ['single', 'multi', 'error']) {
+  $(`scenario-${id}`).addEventListener('click', () => {
+    scenario = id;
+    for (const name of ['single', 'multi', 'error']) {
+      $(`scenario-${name}`).setAttribute('aria-pressed', String(name === id));
+    }
+    apply();
+  });
 }
 
 // ---- live state -----------------------------------------------------------

@@ -75,11 +75,12 @@
 <body>
 <main>
   <h1>music-pill playground</h1>
-  <p class="lede">Configure a pill, preview it live in the corner of this page, and copy the snippet.</p>
+  <p class="lede">Configure a pill, preview it live in the corner of this page, and copy the snippet. You are responsible for the rights to any song you display and any audio you attach.</p>
 
   <div class="tabs" role="tablist" aria-label="Mode">
     <button role="tab" id="tab-track" aria-selected="true" aria-controls="mode-track">Spotify track</button>
     <button role="tab" id="tab-tone" aria-selected="false" aria-controls="mode-tone">Test tone (audio engine)</button>
+    <button role="tab" id="tab-sources" aria-selected="false" aria-controls="mode-sources" tabindex="-1">Sources</button>
   </div>
 
   <div id="mode-track" role="tabpanel" aria-labelledby="tab-track">
@@ -130,6 +131,19 @@
         </select></label>
         <label>Fade duration (s) <input id="tone-fade" type="number" min="0" max="10" step="0.1" value="1.5"></label>
       </div>
+    </section>
+  </div>
+
+  <div id="mode-sources" role="tabpanel" aria-labelledby="tab-sources" hidden>
+    <section class="panel">
+      <h2>Generated tone: one source, several sources, error</h2>
+      <p class="warn">These cases play <code>fixtures/audio/test-tone.wav</code>, a tone generated in this repo, or they refuse it on purpose. They are <strong>not</strong> Spotify recordings. The link uses a placeholder track id. You still need rights to any song and audio you use on your own site.</p>
+      <div class="row" style="margin-top:12px" role="radiogroup" aria-label="Source example">
+        <button class="action" type="button" id="scenario-single" aria-pressed="true">Single WAV</button>
+        <button class="action" type="button" id="scenario-multi" aria-pressed="false">Several sources</button>
+        <button class="action" type="button" id="scenario-error" aria-pressed="false">Unplayable type</button>
+      </div>
+      <p class="note" id="scenario-note"></p>
     </section>
   </div>
 

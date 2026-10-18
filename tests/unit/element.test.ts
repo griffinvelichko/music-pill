@@ -6,7 +6,8 @@ import { FakeAudioContext, flush } from './fakes';
 
 const URL_ = 'https://open.spotify.com/track/4PTG3Z6ehGkBFwjybzWkR8';
 
-let playOutcome: 'resolve' | 'reject' = 'resolve';
+let playOutcome: 'resolve' | 'reject' | 'pending' = 'resolve';
+let releasePlay: (() => void) | null = null;
 
 beforeAll(() => {
   (globalThis as Record<string, unknown>).AudioContext = class extends FakeAudioContext {
@@ -14,8 +15,31 @@ beforeAll(() => {
       super('running');
     }
   };
+  // Deterministic type detection. happy-dom's canPlayType is not a real browser.
+  HTMLMediaElement.prototype.canPlayType = function (type: string) {
+    const base = type.split(';')[0]?.trim().toLowerCase() ?? '';
+    if (
+      base === 'audio/mpeg' ||
+      base === 'audio/wav' ||
+      base === 'audio/wave' ||
+      base === 'audio/mp4' ||
+      base === 'audio/ogg' ||
+      base === 'audio/aac'
+    ) {
+      return 'probably';
+    }
+    return '';
+  };
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
     if (playOutcome === 'reject') return Promise.reject(new DOMException('blocked', 'NotAllowedError'));
+    if (playOutcome === 'pending') {
+      return new Promise((resolve) => {
+        releasePlay = () => {
+          Object.defineProperty(this, 'paused', { configurable: true, value: false });
+          resolve();
+        };
+      });
+    }
     Object.defineProperty(this, 'paused', { configurable: true, value: false });
     return Promise.resolve();
   });
@@ -28,10 +52,12 @@ beforeAll(() => {
 
 beforeEach(() => {
   playOutcome = 'resolve';
+  releasePlay = null;
   sessionStorage.clear();
 });
 afterEach(async () => {
   document.body.innerHTML = '';
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
   await flush();
 });
 
@@ -177,9 +203,14 @@ describe('audio pill', () => {
     await flush(10);
     expect(el.playbackState).toBe('playing');
     expect(button.getAttribute('aria-label')).toBe('Mute website sound');
+    expect($(el, '.status').textContent).toBe('Playing');
+    expect($(el, '.status').closest('a')).toBeNull();
     button.click();
     expect(el.playbackState).toBe('muted');
     expect(button.getAttribute('aria-label')).toBe('Enable website sound');
+    expect($(el, '.status').textContent).toBe('Muted');
+    expect($(el, '[data-icon="off"]').hasAttribute('hidden')).toBe(false);
+    expect($(el, '[data-icon="pause"]').hasAttribute('hidden')).toBe(true);
   });
 
   it('reports blocked autoplay and keeps an Enable label (no false playing indicator)', async () => {
@@ -294,6 +325,7 @@ describe('audio pill', () => {
     expect(codes).toEqual(['invalid-audio-src']);
     expect(el.playbackState).toBe('none');
     expect($(el, 'button').hidden).toBe(true);
+    expect(el.shadowRoot!.querySelector('audio')).toBeNull();
   });
 
   it('error details carry only a code and a generic message', async () => {
@@ -301,5 +333,239 @@ describe('audio pill', () => {
     document.addEventListener('music-pill-error', (e) => details.push((e as CustomEvent).detail), { once: true });
     await mount({ 'spotify-url': 'nope' });
     expect(Object.keys(details[0] as object).sort()).toEqual(['code', 'message']);
+  });
+
+  it('shows a loading state outside the Spotify link, then Playing', async () => {
+    playOutcome = 'pending';
+    const el = await mount({ 'spotify-url': URL_, 'audio-src': '/tone.wav', autoplay: 'off' });
+    $(el, 'button').click();
+    await flush();
+    expect(el.playbackState).toBe('starting');
+    const status = $(el, '.status');
+    expect(status.hidden).toBe(false);
+    expect(status.textContent).toBe('Loading audio');
+    expect(status.closest('a')).toBeNull();
+    expect($(el, 'button').contains(status)).toBe(false);
+    expect($(el, '.spinner').hasAttribute('hidden')).toBe(false);
+    expect($(el, 'button').getAttribute('aria-busy')).toBe('true');
+    expect(linkName(el)).not.toContain('Loading');
+    releasePlay?.();
+    await flush(10);
+    expect(el.playbackState).toBe('playing');
+    expect($(el, '.status').textContent).toBe('Playing');
+    expect($(el, '.spinner').hasAttribute('hidden')).toBe(true);
+    expect($(el, 'button').hasAttribute('aria-busy')).toBe(false);
+  });
+
+  it('shows a specific decode error without putting it on the Spotify link', async () => {
+    const details: { code: string; message: string }[] = [];
+    const el = await mount({ 'spotify-url': URL_, 'audio-src': '/tone.wav', autoplay: 'off' });
+    el.addEventListener('music-pill-error', (e) => details.push((e as CustomEvent).detail));
+    const audio = el.shadowRoot!.querySelector('audio')!;
+    Object.defineProperty(audio, 'error', { configurable: true, get: () => ({ code: 3 }) });
+    audio.dispatchEvent(new Event('error'));
+    expect(el.playbackState).toBe('error');
+    expect(details.map((d) => d.code)).toEqual(['audio-decode-failed']);
+    expect(details[0]!.message).toMatch(/decode/i);
+    expect(details[0]!.message).not.toMatch(/https?:|\/tone\.wav|DOMException/i);
+    const status = $(el, '.status');
+    expect(status.getAttribute('role')).toBe('alert');
+    expect(status.textContent).toBe(details[0]!.message);
+    expect(status.closest('a')).toBeNull();
+    expect($<HTMLButtonElement>(el, 'button').disabled).toBe(true);
+    expect($(el, 'button').getAttribute('aria-label')).toBe('Website sound unavailable');
+    expect($(el, '[data-icon="error"]').hasAttribute('hidden')).toBe(false);
+    expect(linkName(el)).toBe('Listen on Spotify (opens in a new tab)');
+  });
+
+  it('distinguishes paused from muted', async () => {
+    const el = await mount({ 'spotify-url': URL_, 'audio-src': '/tone.wav' });
+    await flush(10);
+    expect(el.playbackState).toBe('playing');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(el.playbackState).toBe('paused');
+    expect($(el, '.status').textContent).toBe('Paused');
+    expect($(el, '[data-icon="pause"]').hasAttribute('hidden')).toBe(false);
+    expect($(el, '[data-icon="off"]').hasAttribute('hidden')).toBe(true);
+    expect($(el, 'button').getAttribute('aria-label')).toBe('Enable website sound');
+  });
+});
+
+describe('audio sources', () => {
+  async function mountWith(
+    attrs: Record<string, string>,
+    setup?: (el: MusicPillElement) => void,
+  ): Promise<MusicPillElement> {
+    const el = document.createElement('music-pill') as MusicPillElement;
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    setup?.(el);
+    document.body.append(el);
+    await flush();
+    return el;
+  }
+
+  it('keeps a single audio-src and infers audio/wav', async () => {
+    const el = await mountWith({ 'spotify-url': URL_, 'audio-src': '/tone.wav', autoplay: 'off' });
+    expect(el.audioSources).toEqual([{ src: '/tone.wav' }]);
+    expect(el.shadowRoot!.querySelector('audio')!.getAttribute('src')).toContain('/tone.wav');
+    expect(el.playbackState).toBe('idle');
+  });
+
+  it('plays the first source whose type the browser accepts', async () => {
+    const el = await mountWith({ 'spotify-url': URL_, autoplay: 'off' }, (node) => {
+      node.insertAdjacentHTML(
+        'beforeend',
+        '<source src="/nope.mp3" type="audio/x-music-pill-unsupported"><source src="/tone.wav" type="audio/wav">',
+      );
+    });
+    const audio = el.shadowRoot!.querySelector('audio')!;
+    expect(audio.getAttribute('src')).toContain('/tone.wav');
+    expect(audio.getAttribute('src')).not.toContain('nope.mp3');
+  });
+
+  it('skips an audio-src extension the browser cannot play and uses the next <source>', async () => {
+    const previous = HTMLMediaElement.prototype.canPlayType;
+    HTMLMediaElement.prototype.canPlayType = function (type: string) {
+      return type.split(';')[0]?.trim().toLowerCase() === 'audio/wav' ? 'probably' : '';
+    };
+    try {
+      const el = await mountWith({ 'spotify-url': URL_, 'audio-src': '/song.mp3', autoplay: 'off' }, (node) => {
+        node.insertAdjacentHTML('beforeend', '<source src="/tone.wav" type="audio/wav">');
+      });
+      expect(el.shadowRoot!.querySelector('audio')!.getAttribute('src')).toContain('/tone.wav');
+    } finally {
+      HTMLMediaElement.prototype.canPlayType = previous;
+    }
+  });
+
+  it('uses the audio-sources attribute instead of audio-src', async () => {
+    const el = await mountWith({
+      'spotify-url': URL_,
+      autoplay: 'off',
+      'audio-src': '/ignored.wav',
+      'audio-sources': JSON.stringify([
+        { src: '/nope.ogg', type: 'audio/x-music-pill-unsupported' },
+        { src: '/from-list.wav', type: 'audio/wav' },
+      ]),
+    });
+    expect(el.shadowRoot!.querySelector('audio')!.getAttribute('src')).toContain('/from-list.wav');
+  });
+
+  it('lets the audioSources property override attributes and children', async () => {
+    const el = await mountWith({ 'spotify-url': URL_, 'audio-src': '/ignored.wav', autoplay: 'off' }, (node) => {
+      node.insertAdjacentHTML('beforeend', '<source src="/child.wav" type="audio/wav">');
+    });
+    el.audioSources = [
+      { src: '/nope.m4a', type: 'audio/x-music-pill-unsupported' },
+      { src: '/property.wav', type: 'audio/wav' },
+    ];
+    await flush();
+    expect(el.shadowRoot!.querySelector('audio')!.getAttribute('src')).toContain('/property.wav');
+    el.audioSources = null;
+    await flush();
+    expect(el.shadowRoot!.querySelector('audio')!.getAttribute('src')).toContain('/ignored.wav');
+  });
+
+  it('picks up a <source> added after connect', async () => {
+    const el = await mountWith({ 'spotify-url': URL_, autoplay: 'off' });
+    expect(el.shadowRoot!.querySelector('audio')).toBeNull();
+    const source = document.createElement('source');
+    source.setAttribute('src', '/tone.wav');
+    source.setAttribute('type', 'audio/wav');
+    el.append(source);
+    await flush();
+    expect(el.shadowRoot!.querySelector('audio')!.getAttribute('src')).toContain('/tone.wav');
+  });
+
+  it('reports no-playable-source with an accessible error and a working link', async () => {
+    const details: { code: string; message: string }[] = [];
+    document.addEventListener('music-pill-error', (e) => details.push((e as CustomEvent).detail));
+    const el = await mountWith({ 'spotify-url': URL_, 'song-title': 'Tone', autoplay: 'off' }, (node) => {
+      node.insertAdjacentHTML(
+        'beforeend',
+        '<source src="/tone.wav" type="audio/x-music-pill-unsupported">',
+      );
+    });
+    expect(el.playbackState).toBe('error');
+    expect(el.shadowRoot!.querySelector('audio')).toBeNull();
+    expect(details.map((d) => d.code)).toEqual(['no-playable-source']);
+    expect(details[0]!.message).toMatch(/MP3/);
+    expect(details[0]!.message).not.toMatch(/https?:|tone\.wav/);
+    const status = $(el, '.status');
+    expect(status.hidden).toBe(false);
+    expect(status.getAttribute('role')).toBe('alert');
+    expect(status.textContent).toBe(details[0]!.message);
+    expect(status.closest('a')).toBeNull();
+    expect($<HTMLButtonElement>(el, 'button').disabled).toBe(true);
+    expect($(el, 'a').getAttribute('href')).toBe(URL_);
+    expect(linkName(el)).toBe('Tone, listen on Spotify (opens in a new tab)');
+    expect(linkName(el)).not.toContain('MP3');
+  });
+
+  it('rejects a malformed audio-sources attribute', async () => {
+    const codes: string[] = [];
+    document.addEventListener('music-pill-error', (e) => codes.push((e as CustomEvent).detail.code), { once: true });
+    const el = await mountWith({ 'spotify-url': URL_, 'audio-sources': '{not json' });
+    expect(codes).toEqual(['invalid-audio-sources']);
+    expect(el.playbackState).toBe('none');
+    expect($(el, 'button').hidden).toBe(true);
+    expect(el.shadowRoot!.querySelector('audio')).toBeNull();
+  });
+
+  it('treats audio-sources="[]" as link-only', async () => {
+    const errors: string[] = [];
+    document.addEventListener('music-pill-error', (e) => errors.push((e as CustomEvent).detail.code));
+    const el = await mountWith({ 'spotify-url': URL_, 'audio-sources': '[]', 'audio-src': '/tone.wav' });
+    expect(el.playbackState).toBe('none');
+    expect(el.shadowRoot!.querySelector('audio')).toBeNull();
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('blocked autoplay gesture', () => {
+  it('starts on the next click or key, and ignores scroll, Tab, and autoplay off', async () => {
+    playOutcome = 'reject';
+    const el = await mount({ 'spotify-url': URL_, 'audio-src': '/tone.wav' });
+    await flush(10);
+    expect(el.playbackState).toBe('blocked');
+    expect($(el, '.status').textContent).toBe('Sound off');
+
+    document.dispatchEvent(new Event('wheel', { bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    await flush(10);
+    expect(el.playbackState).toBe('blocked');
+
+    playOutcome = 'resolve';
+    document.body.click();
+    await flush(10);
+    expect(el.playbackState).toBe('playing');
+    expect($(el, '.status').textContent).toBe('Playing');
+
+    const quiet = await mount({ 'spotify-url': URL_, 'audio-src': '/other.wav', autoplay: 'off' });
+    document.body.click();
+    await flush(10);
+    expect(quiet.playbackState).toBe('idle');
+  });
+
+  it('a click on the sound button starts sound once and does not immediately mute', async () => {
+    playOutcome = 'reject';
+    const el = await mount({ 'spotify-url': URL_, 'audio-src': '/tone.wav' });
+    await flush(10);
+    expect(el.playbackState).toBe('blocked');
+    playOutcome = 'resolve';
+    $(el, 'button').click();
+    await flush(10);
+    expect(el.playbackState).toBe('playing');
+    expect($(el, 'button').getAttribute('aria-label')).toBe('Mute website sound');
+  });
+});
+
+describe('reduced motion stylesheet', () => {
+  it('drops UI motion and leaves the rule where audio fades are not mentioned', async () => {
+    const { STYLES } = await import('../../src/styles');
+    expect(STYLES).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(STYLES).toMatch(/prefers-reduced-motion: reduce[\s\S]*\.spinner\s*\{[^}]*animation:\s*none/);
+    expect(STYLES).toMatch(/prefers-reduced-motion: reduce[\s\S]*transition:\s*none/);
   });
 });

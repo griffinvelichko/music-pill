@@ -40,6 +40,15 @@ export type EngineEnv = {
 /** No media-time progress for this long while "playing" counts as a stall. */
 const STALL_TIMEOUT_MS = 6000;
 
+const NETWORK_MESSAGE =
+  'The audio could not be loaded. Check that the file exists and, for audio on another origin, that the server sends Access-Control-Allow-Origin.';
+
+const DECODE_MESSAGE =
+  'The audio file could not be decoded. It may be damaged or use a codec this browser does not support.';
+
+const UNSUPPORTED_MESSAGE =
+  'This browser could not play the audio file. Try an MP3, M4A/AAC, OGG, or WAV file.';
+
 const LOAD_FAILED_MESSAGE =
   'The audio could not be loaded. Check the URL and file format; for audio on another origin, the server must send Access-Control-Allow-Origin.';
 
@@ -219,6 +228,8 @@ export class AudioEngine implements AudioOwner {
       const name = err instanceof Error || (typeof err === 'object' && err) ? (err as { name?: unknown }).name : undefined;
       if (name === 'NotAllowedError') {
         this.#blocked('play-rejected');
+      } else if (name === 'NotSupportedError') {
+        this.#fail('audio-unsupported', UNSUPPORTED_MESSAGE);
       } else if (name !== 'AbortError') {
         this.#fail('audio-load-failed', LOAD_FAILED_MESSAGE);
       } else {
@@ -436,7 +447,20 @@ export class AudioEngine implements AudioOwner {
 
   #onMediaError(): void {
     if (this.#destroyed || !this.audio.error) return;
-    this.#fail('audio-load-failed', LOAD_FAILED_MESSAGE);
+    // MediaError codes: 1 aborted, 2 network, 3 decode, 4 source not supported.
+    switch (this.audio.error.code) {
+      case 3:
+        this.#fail('audio-decode-failed', DECODE_MESSAGE);
+        break;
+      case 4:
+        this.#fail('audio-unsupported', UNSUPPORTED_MESSAGE);
+        break;
+      case 2:
+        this.#fail('audio-load-failed', NETWORK_MESSAGE);
+        break;
+      default:
+        this.#fail('audio-load-failed', LOAD_FAILED_MESSAGE);
+    }
   }
 
   #onHidden(): void {

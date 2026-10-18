@@ -29,8 +29,10 @@ It grants no rights in anything listed below.
 - Linking to a song on Spotify does **not** grant any right to play that
   recording, or any other audio, on your website, and does not grant rights in
   its artwork.
-- Audio you configure via `audio-src` must be audio you are licensed to play
-  publicly on a website (e.g. you own it, or you hold an appropriate licence).
+- Audio you configure via `audio-src`, `audio-sources`, `<source>` children,
+  or `audioSources` must be audio you are licensed to play publicly on a
+  website (you own it, or you hold an appropriate licence). That duty covers
+  every file you attach, and also the song you display.
 - Album artwork you configure via `artwork` is subject to its own rights.
   Artwork returned by Spotify's oEmbed endpoint is Spotify-provided content:
   display it only as Spotify's terms permit, with attribution and a link back.
