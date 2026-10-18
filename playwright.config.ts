@@ -9,12 +9,12 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://127.0.0.1:4391',
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'node scripts/serve.mjs --port 4173 --port 4174',
-    url: 'http://127.0.0.1:4173/tests/e2e/pages/harness.html',
+    command: 'node scripts/serve.mjs --port 4391 --port 4392',
+    url: 'http://127.0.0.1:4391/tests/e2e/pages/harness.html',
     reuseExistingServer: !process.env.CI,
   },
   projects: [

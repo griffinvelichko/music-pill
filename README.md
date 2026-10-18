@@ -31,7 +31,7 @@ git clone https://github.com/griffinvelichko/music-pill.git
 cd music-pill
 npm ci
 npm run build          # -> dist/auto.js (self-contained module)
-npm run playground     # serves and opens http://127.0.0.1:4173/playground/
+npm run playground     # serves and opens http://127.0.0.1:4391/playground/
 ```
 
 Copy `dist/auto.js` into your site (for example to `/vendor/music-pill/auto.js`), then:
@@ -61,7 +61,7 @@ must be in the attributes. See [Metadata](#metadata) for an optional helper that
 fills in the title and artwork for you.
 
 A runnable local example lives in [`examples/plain-html/`](examples/plain-html/index.html)
-(`npm run build && npm run serve`, then open `http://127.0.0.1:4173/examples/plain-html/`).
+(`npm run build && npm run serve`, then open `http://127.0.0.1:4391/examples/plain-html/`).
 
 ### After publication (placeholders)
 
@@ -630,7 +630,7 @@ has its own autoplay, audio-session and background rules.
 
 ### Manual device checklist (iOS / Android)
 
-1. `npm run build && node scripts/serve.mjs --port 4173`, then expose it over HTTPS on your LAN (for example `npx localtunnel --port 4173`, or your own tunnel) and open `/playground/` on the device.
+1. `npm run build && node scripts/serve.mjs --port 4391`, then expose it over HTTPS on your LAN (for example `npx localtunnel --port 4391`, or your own tunnel) and open `/playground/` on the device.
 2. **Tone mode:** on first load, confirm that nothing plays and the button reads "Enable website sound". Tap it: you should hear a fade-in within about 2 s, and the button should read "Mute website sound".
 3. Wait for at least two loops of the 1 s fixture. You should hear fade-out, a brief gap, and fade-in, without clicks.
 4. Tap mute: silence within about 0.1 s. Reload: it stays muted.

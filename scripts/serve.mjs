@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Zero-dependency static server for the playground, examples and browser tests.
 //
-//   node scripts/serve.mjs                    -> http://127.0.0.1:4173 (repo root)
+//   node scripts/serve.mjs                    -> http://127.0.0.1:4391 (repo root)
 //   node scripts/serve.mjs --open /playground/
-//   node scripts/serve.mjs --port 4173 --port 4174   (second origin for CORS tests)
+//   node scripts/serve.mjs --port 4391 --port 4392   (second origin for CORS tests)
 //
 // Supports HTTP Range requests (Safari/WebKit require them for media).
 // Test-only path prefixes, served from the repo root:
@@ -25,7 +25,7 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] === '--port') ports.push(Number(args[++i]));
   else if (args[i] === '--open') open = args[++i];
 }
-if (ports.length === 0) ports.push(Number(process.env.PORT) || 4173);
+if (ports.length === 0) ports.push(Number(process.env.PORT) || 4391);
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
