@@ -29,6 +29,10 @@ All notable changes to this project are documented here. The format follows
 
 - Media failures now say whether the file could not be fetched, decoded, or
   played. `audio-load-failed` remains the network and generic code.
+- The README now matches the shipped API: source precedence and the 12-source
+  cap, every error code and what triggers it, playback states and status text,
+  the first-gesture start, reduced motion, the resolver CLI, bundle size, and
+  the limit that a decode or network failure does not try the next file.
 
 ## [0.1.0] - 2026-10-17
 

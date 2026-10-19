@@ -1,4 +1,4 @@
-// Optional metadata helper for local/build-time use (Node 18+ or a browser).
+// Optional metadata helper for local/build-time use (Node 20+ or a browser).
 // Uses only documented Spotify oEmbed fields: `title` and `thumbnail_url`
 // (+ dimensions). oEmbed has no separate artist field and no audio URL, so the
 // artist stays a value you type yourself, and audio is never resolved.

@@ -19,14 +19,17 @@ export type {
 /**
  * Read-only playback state exposed as `element.playbackState`.
  *
- * - `none`     no `audio-src`: link-only pill, no audio work is done.
+ * - `none`     no audio configuration the component will play: link-only,
+ *              an empty source list, or URLs/JSON it rejected. The sound
+ *              button is hidden. An error event may still have fired.
  * - `idle`     audio configured but not started (autoplay off, another
  *              instance holds the page's audio, or waiting to start).
  * - `starting` a start attempt is in flight. Not yet audible.
  * - `playing`  the media element is playing *and* the audio path is running.
  * - `blocked`  the browser refused to start audio without a user gesture.
  * - `muted`    the visitor turned website sound off. Wins over everything.
- * - `paused`   stopped because the page was hidden or another instance took over.
+ * - `paused`   the page was hidden, another instance took over, or playback
+ *              was interrupted (including a stall).
  * - `error`    the audio could not be loaded, decoded, or played; the link still works.
  */
 export type PlaybackState =
@@ -91,7 +94,11 @@ export type MusicPillAudioSource = {
 export type MusicPillReadyDetail = {
   /** Canonical Spotify track URL that the pill links to. */
   spotifyUrl: string;
-  /** Whether audio-src is configured. Says nothing about playback success. */
+  /**
+   * True when a source was selected, or when every candidate had a type the
+   * browser refused. False for a link-only pill and for an invalid
+   * configuration. Says nothing about whether playback succeeded.
+   */
   hasAudio: boolean;
 };
 
