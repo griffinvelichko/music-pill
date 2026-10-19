@@ -24,6 +24,9 @@ All notable changes to this project are documented here. The format follows
   spinner. Audio fade-in and fade-out are unchanged.
 - `examples/sources/` and a playground **Sources** tab, using the generated
   test tone, for one source, several sources, and the unplayable-type error.
+- `examples/sample-track/`: a sample pill for one Spotify track. Title and
+  artwork come from oEmbed. The artist line is a placeholder. Sound is the
+  generated test tone.
 
 ### Changed
 

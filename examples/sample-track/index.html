@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>music-pill sample: Strobe</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f4f6;
+      --fg: #1d1d1f;
+      --muted: #5f5f64;
+      --card: #ffffff;
+      --line: #e2e2e6;
+      --note-bg: #fff4e5;
+      --note-fg: #7a4100;
+      --chip: #ececf0;
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #111113;
+      --fg: #f5f5f7;
+      --muted: #a8a8ae;
+      --card: #1c1c1f;
+      --line: #333338;
+      --note-bg: #3a2a12;
+      --note-fg: #ffd59a;
+      --chip: #2a2a2e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(900px 420px at 10% -10%, rgb(120 140 255 / 0.16), transparent 60%),
+        var(--bg);
+      color: var(--fg);
+      font: 16px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { max-width: 680px; margin: 0 auto; padding: 56px 20px 160px; }
+    p { margin: 0; }
+    h1 { font-size: 40px; line-height: 1.1; letter-spacing: -0.03em; margin: 0 0 8px; font-weight: 650; }
+    .kicker { color: var(--muted); margin: 0 0 28px; }
+    .note {
+      background: var(--note-bg);
+      color: var(--note-fg);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin: 0 0 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 8px 18px;
+      margin: 0 0 20px;
+    }
+    .card dl { display: grid; grid-template-columns: 7.5rem 1fr; gap: 10px 12px; margin: 12px 0; }
+    .card dt { color: var(--muted); }
+    .card dd { margin: 0; overflow-wrap: anywhere; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+    button {
+      font: inherit;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--fg);
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    code { font-size: 0.92em; }
+    a { color: inherit; }
+  </style>
+  <script type="module" src="../../dist/auto.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Strobe</h1>
+    <p class="kicker">A sample <code>&lt;music-pill&gt;</code> for one Spotify track. Title and artwork come from Spotify’s oEmbed endpoint via <code>music-pill-resolve</code>. oEmbed’s title is only “Strobe”, so the artist line is a placeholder.</p>
+
+    <p class="note"><strong>This page plays a generated test tone, not this song.</strong> <code>audio-src</code> points at <code>fixtures/audio/test-tone.wav</code>, made by <code>scripts/generate-fixtures.mjs</code>. A real deployment should point <code>audio-src</code> at a file the site owner has the rights to play, and that file should be the same recording the pill links to. You are responsible for the rights to the song you display and the audio you attach.</p>
+
+    <div class="row">
+      <button type="button" id="theme-light" aria-pressed="true">Light</button>
+      <button type="button" id="theme-dark" aria-pressed="false">Dark</button>
+      <span id="playback">Sound: idle</span>
+    </div>
+
+    <section class="card">
+      <dl>
+        <dt>Track</dt>
+        <dd><a id="track-link" href="https://open.spotify.com/track/5GjUhwxykUVYCYkiNo4BEM">open.spotify.com/track/5GjUhwxykUVYCYkiNo4BEM</a></dd>
+        <dt>Title</dt>
+        <dd>Strobe <span style="color:var(--muted)">(oEmbed <code>title</code>)</span></dd>
+        <dt>Artist</dt>
+        <dd>[Artist — fill in] <span style="color:var(--muted)">(not in oEmbed)</span></dd>
+        <dt>Artwork</dt>
+        <dd>Spotify thumbnail from oEmbed</dd>
+        <dt>Audio</dt>
+        <dd><code>fixtures/audio/test-tone.wav</code></dd>
+      </dl>
+    </section>
+
+    <p class="kicker">Run <code>npm run build &amp;&amp; npm run serve</code> and open <code>http://127.0.0.1:4391/examples/sample-track/</code>. Autoplay is off. Use the pill’s sound button. The link opens the track on Spotify.</p>
+  </main>
+
+  <!--
+    Resolved with music-pill-resolve against Spotify oEmbed.
+    title: Strobe
+    thumbnail_url: https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0288187e12b8a3a1063eb0dd80
+    Artist is a placeholder: oEmbed has no artist field, and the title does not include one.
+    audio-src is the repo's generated tone. Do not replace it with audio from Spotify.
+  -->
+  <music-pill
+    id="sample"
+    spotify-url="https://open.spotify.com/track/5GjUhwxykUVYCYkiNo4BEM"
+    song-title="Strobe"
+    artist="[Artist — fill in]"
+    artwork="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0288187e12b8a3a1063eb0dd80"
+    audio-src="../../fixtures/audio/test-tone.wav"
+    autoplay="off"
+    theme="light"
+    position="bottom-right"
+  ></music-pill>
+
+  <script>
+    const pill = document.getElementById('sample');
+    const playback = document.getElementById('playback');
+    const light = document.getElementById('theme-light');
+    const dark = document.getElementById('theme-dark');
+
+    const labels = {
+      none: 'Sound: off',
+      idle: 'Sound: idle',
+      starting: 'Sound: loading',
+      playing: 'Sound: playing',
+      blocked: 'Sound: off',
+      muted: 'Sound: muted',
+      paused: 'Sound: paused',
+      error: 'Sound: unavailable',
+    };
+
+    function showState() {
+      playback.textContent = labels[pill.playbackState] || pill.playbackState;
+    }
+
+    function setTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      pill.setAttribute('theme', theme);
+      light.setAttribute('aria-pressed', theme === 'light' ? 'true' : 'false');
+      dark.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+    }
+
+    light.addEventListener('click', () => setTheme('light'));
+    dark.addEventListener('click', () => setTheme('dark'));
+    pill.addEventListener('music-pill-ready', showState);
+    pill.addEventListener('music-pill-statechange', showState);
+  </script>
+</body>
+</html>
