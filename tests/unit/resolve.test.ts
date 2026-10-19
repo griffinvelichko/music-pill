@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   ARTIST_UNAVAILABLE_NOTE,
@@ -11,8 +12,9 @@ import {
 
 const URL_ = 'https://open.spotify.com/track/4PTG3Z6ehGkBFwjybzWkR8';
 const STROBE_URL = 'https://open.spotify.com/track/5GjUhwxykUVYCYkiNo4BEM';
-const strobeHtml = readFileSync(new URL('../fixtures/resolve/strobe-track.html', import.meta.url), 'utf8');
-const peachesHtml = readFileSync(new URL('../fixtures/resolve/peaches-track.html', import.meta.url), 'utf8');
+const readRepo = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
+const strobeHtml = readRepo('tests/fixtures/resolve/strobe-track.html');
+const peachesHtml = readRepo('tests/fixtures/resolve/peaches-track.html');
 
 const fakeFetch = (body: unknown, ok = true) =>
   (async () => ({ ok, json: async () => body })) as unknown as typeof fetch;
@@ -212,15 +214,15 @@ describe('toMusicPillSnippet', () => {
 
 describe('sample track page', () => {
   it('is generated from resolver output and the template does not name the artist', () => {
-    const template = readFileSync(new URL('../../examples/sample-track/index.template.html', import.meta.url), 'utf8');
-    const script = readFileSync(new URL('../../scripts/generate-sample-track.mjs', import.meta.url), 'utf8');
-    const resolved = JSON.parse(readFileSync(new URL('../../examples/sample-track/resolved.json', import.meta.url), 'utf8')) as {
+    const template = readRepo('examples/sample-track/index.template.html');
+    const script = readRepo('scripts/generate-sample-track.mjs');
+    const resolved = JSON.parse(readRepo('examples/sample-track/resolved.json')) as {
       spotifyUrl: string;
       title: string;
       artist: string;
       artworkUrl: string;
     };
-    const html = readFileSync(new URL('../../examples/sample-track/index.html', import.meta.url), 'utf8');
+    const html = readRepo('examples/sample-track/index.html');
     expect(template).not.toContain('deadmau5');
     expect(script).not.toContain('deadmau5');
     expect(html).toContain(`spotify-url="${resolved.spotifyUrl}"`);
