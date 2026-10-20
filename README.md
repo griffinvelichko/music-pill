@@ -234,18 +234,21 @@ song loads. At most 12 sources are considered.
 **Explicit attributes are authoritative**, and they are the reliable,
 zero-backend path. Write the title, artist and artwork yourself.
 
-To fill them in faster, use the optional resolver. It calls Spotify's
-documented [oEmbed endpoint](https://developer.spotify.com/documentation/embeds/tutorials/using-the-oembed-api)
-**at build time or on your machine**, not on every page view:
+To fill them in faster, use the optional resolver **at build time or on your
+machine**, not on every page view. It requests two URLs and nothing else:
+
+- Spotify's documented [oEmbed endpoint](https://developer.spotify.com/documentation/embeds/tutorials/using-the-oembed-api) for `title` and `thumbnail_url` (plus dimensions).
+- The public track page (`https://open.spotify.com/track/…`) for the artist, from the `music:musician_description` meta tag. If that tag is missing, the English document title is a fallback (`… by Artist | Spotify`, including the "Song, Lyrics, and Music Video" wording).
 
 ```sh
 npm run build
+node bin/music-pill-resolve.mjs "https://open.spotify.com/track/TRACK_ID"
 node bin/music-pill-resolve.mjs "https://open.spotify.com/track/TRACK_ID" --artist "Artist name"
 node bin/music-pill-resolve.mjs "https://open.spotify.com/track/TRACK_ID" --json
 # after installing the package: npx music-pill-resolve <url> [--artist "Name"] [--json]
 ```
 
-`--json` prints the metadata object. Without it, the command prints the tag. `--help` prints usage. A failed oEmbed lookup still prints a link-only tag and a note on stderr. An invalid track URL exits with status 1.
+`--json` prints the metadata object, including `artist`. Without it, the command prints the tag. `--artist` replaces the resolved name, and an empty `--artist ""` clears it. `--help` prints usage. A failed oEmbed lookup still prints a tag and a note on stderr; a missing artist does the same and does not fail the command. An invalid track URL exits with status 1.
 
 The default output is a ready-to-paste tag:
 
@@ -254,25 +257,36 @@ The default output is a ready-to-paste tag:
 <music-pill
   spotify-url="https://open.spotify.com/track/TRACK_ID"
   song-title="Title from oEmbed"
-  artist="Artist name"
+  artist="Artist from the track page"
   artwork="https://image-cdn-….spotifycdn.com/image/…"
 ></music-pill>
 ```
 
-The resolver keeps to what oEmbed actually documents:
+What the resolver will and will not do:
 
-- It uses only oEmbed's `title` and `thumbnail_url` (plus dimensions). oEmbed has **no separate artist field**, so the artist is always yours to type. The publisher is not treated as the artist, and the title string is never parsed for one.
-- oEmbed returns **no audio URL**, and the resolver never looks for one.
-- The returned iframe `html` is ignored and never injected anywhere.
-- A network error, CORS block or unknown track is a normal outcome: you get `status: "unavailable"` and the link-only snippet.
+- oEmbed has **no artist field**. `author_name` is ignored. The artist comes from the track page, not from parsing the oEmbed title.
+- Several artists stay as Spotify writes them, usually one comma-separated string (`Justin Bieber, Daniel Caesar, GIVĒON`). Repeated `music:musician_description` tags are joined with `", "`. Names are not split on commas, so a band name that contains a comma stays intact. Spotify sometimes lists only the primary artist and omits featured artists; the resolver reports that string.
+- The track-page markup is not a documented oEmbed field. Spotify can change it. The title fallback only matches the English patterns above (`Accept-Language: en` is sent). A value that looks like a URL is discarded.
+- oEmbed sends `Access-Control-Allow-Origin: *`, so a browser can fill title and artwork. The track page does not, so **the artist lookup works in Node 20+ and comes back null in a browser**. That is a normal result, with a note, not a thrown error.
+- No audio, preview, or embed URL is read or returned. The iframe `html` from oEmbed is ignored. Nothing discovered inside the HTML is requested. A non-HTML response is not parsed.
+- A network error, HTTP error, CORS block, or unusable oEmbed body sets `status: "unavailable"` and null title and artwork. If the track page still answered, `artist` can be set. If only oEmbed answered, `artist` is null and title and artwork are filled.
 
-It is also available programmatically (Node 20+ or browsers). An invalid track URL throws `TypeError`. A network error, HTTP error, CORS block, or unusable oEmbed body resolves with `status: "unavailable"` and null title and artwork fields. `fetch` and `signal` can be passed in the options object.
+It is also available programmatically. An invalid track URL throws `TypeError`. `fetch` and `signal` can be passed in the options object. `toMusicPillSnippet(meta, { artist })` uses your string, including `""`, instead of `meta.artist`.
 
 ```js
 import { resolveSpotifyMetadata, toMusicPillSnippet } from 'music-pill/resolve';
 const meta = await resolveSpotifyMetadata('spotify:track:TRACK_ID');
-console.log(toMusicPillSnippet(meta, { artist: 'Artist name' }));
+console.log(meta.artist);
+console.log(toMusicPillSnippet(meta));
 ```
+
+`examples/sample-track/` is produced by that resolver, not by typing the artist into the page. After a build:
+
+```sh
+npm run generate:sample-track
+```
+
+That rewrites `examples/sample-track/index.html` from `index.template.html` and writes `resolved.json` beside it. It is not part of `npm run check`, because it calls Spotify. If oEmbed fails, the script exits 1 and leaves the page alone. If the artist is empty, it still writes the page and warns.
 
 A future authenticated Spotify Web API adapter (for richer metadata) is possible
 but out of scope for v1. It would need credentials and a backend.
@@ -602,7 +616,7 @@ The pill follows these rules from Spotify's
 | Import | Safe on the server? | Effect |
 | --- | --- | --- |
 | `music-pill` | Yes | Exports `registerMusicPill()`, types, and URL/attribute helpers. Importing it evaluates no `window`, `document`, `HTMLElement` or `customElements`. `registerMusicPill()` is a no-op outside a browser and returns `undefined`. |
-| `music-pill/resolve` | Yes | The oEmbed metadata helper. |
+| `music-pill/resolve` | Yes | Metadata helper: oEmbed title and artwork, and the artist from the public track page (Node). |
 | `music-pill/auto` | Browser only (it no-ops in Node) | Registers `<music-pill>` as a side effect, and re-exports the root API. Use it from `<script type="module">` or client-only code. |
 | `music-pill/react-jsx` | Types only | Opt-in JSX typing for React. |
 
@@ -816,10 +830,11 @@ Build first, then serve the repo. `npm run serve` listens on `http://127.0.0.1:4
 | --- | --- | --- |
 | [`examples/plain-html/`](examples/plain-html/index.html) | `/examples/plain-html/` | A link-only pill. No sound button. |
 | [`examples/strobe/`](examples/strobe/index.html) | `/examples/strobe/` | A link-only pill with a title, artist, and artwork. No audio file is attached. |
+| [`examples/sample-track/`](examples/sample-track/index.html) | `/examples/sample-track/` | One real Spotify track. Title, artist, and artwork are the committed output of `npm run generate:sample-track`. Sound is the generated test tone, with autoplay off. |
 | [`examples/sources/`](examples/sources/index.html) | `/examples/sources/` | One `audio-src`, several `<source>` children, and an unplayable type. Autoplay is off. |
 | [`playground/`](playground/index.html) | `/playground/` | A live editor. `npm run playground` builds, serves, and opens this page. The **Sources** tab shows the same three cases as `examples/sources/`. |
 
-`examples/sources/` and the playground tone and Sources modes play `fixtures/audio/test-tone.wav`, generated by `npm run fixtures`. That file is a tone, not a recording. The Spotify URL on those pages is a placeholder track id.
+`examples/sources/`, `examples/sample-track/`, and the playground tone and Sources modes play `fixtures/audio/test-tone.wav`, generated by `npm run fixtures`. That file is a tone, not a recording. On `examples/sources/` and in the playground the Spotify URL is a placeholder track id. `examples/sample-track/` links to a real track; its `audio-src` is still the generated tone, and a deployment should replace that with a file the site owner has the rights to play.
 
 ## Known limitations
 
@@ -829,6 +844,7 @@ Build first, then serve the repo. `npm run serve` listens on `http://127.0.0.1:4
 - Only the first 12 sources are considered. An `audio-sources` string longer than 20,000 characters is rejected as a whole.
 - `StateChangeReason` includes `restart`, and a successful loop does not emit it.
 - Audible autoplay depends on the browser. `autoplay="attempt"` is one try. The document listener that follows a block is also one try per song.
+- The artist lookup reads undocumented track-page markup and only works where that page can be fetched (Node 20+). In a browser it stays null because of CORS. Spotify may list only the primary artist.
 
 ## Development
 

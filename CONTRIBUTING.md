@@ -26,6 +26,7 @@ Development needs Node 22.12 or newer, because Vitest 5 requires it. The publish
 | `npm run playground` | Builds, serves and opens the playground |
 | `npm run serve` | Serves the repo at `http://127.0.0.1:4391` (playground, `examples/`, tests) |
 | `npm run fixtures` | Regenerates the WAV tones and SVG artwork under `fixtures/` |
+| `npm run generate:sample-track` | Regenerates `examples/sample-track/` from the resolver. Needs `npm run build` and the network. Not part of `npm run check`. |
 
 `npm run test:e2e` needs a fresh `npm run build`, because the test pages load `dist/auto.js`.
 

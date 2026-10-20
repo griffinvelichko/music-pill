@@ -63,6 +63,7 @@
     "clean": "node scripts/clean.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "fixtures": "node scripts/generate-fixtures.mjs",
+    "generate:sample-track": "node scripts/generate-sample-track.mjs",
     "test": "vitest run",
     "test:ssr": "node scripts/ssr-check.mjs",
     "test:e2e": "playwright test",

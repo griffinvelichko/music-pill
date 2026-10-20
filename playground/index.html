@@ -100,7 +100,7 @@
         <button class="action" id="oembed" type="button">Fetch title &amp; artwork from Spotify oEmbed</button>
         <span id="oembed-status" class="status" role="status"></span>
       </div>
-      <p class="note">oEmbed returns a title and artwork but no separate artist field, so the artist stays whatever you type.</p>
+      <p class="note">Title and artwork come from Spotify oEmbed, which this page can call. The artist is read from the public track page in Node (<code>music-pill-resolve</code>). Browsers cannot read that page (CORS), so this button leaves the artist as you typed it unless a name comes back.</p>
     </section>
 
     <section class="panel">

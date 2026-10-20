@@ -112,13 +112,27 @@ $('oembed').addEventListener('click', async () => {
   status.textContent = 'Looking up…';
   try {
     const meta = await resolveSpotifyMetadata($('spotify-url').value);
-    if (meta.status !== 'ok') {
-      status.textContent = 'oEmbed unavailable (network, CORS or unknown track). Enter metadata yourself.';
+    const filled = [];
+    if (meta.title) {
+      $('song-title').value = meta.title;
+      filled.push('title');
+    }
+    if (meta.artworkUrl) {
+      $('artwork').value = meta.artworkUrl;
+      filled.push('artwork');
+    }
+    if (meta.artist) {
+      $('artist').value = meta.artist;
+      filled.push('artist');
+    }
+    if (filled.length === 0) {
+      status.textContent = 'Lookup unavailable (network, CORS, or unknown track). Enter metadata yourself.';
       return;
     }
-    if (meta.title) $('song-title').value = meta.title;
-    if (meta.artworkUrl) $('artwork').value = meta.artworkUrl;
-    status.textContent = 'Filled title and artwork. Check the artist yourself.';
+    const artistNote = meta.artist
+      ? ''
+      : ' The artist lookup needs Node: browsers cannot read the public track page (CORS).';
+    status.textContent = `Filled ${filled.join(', ')}.${artistNote}`;
     apply();
   } catch (err) {
     status.textContent = err instanceof Error ? err.message : String(err);
