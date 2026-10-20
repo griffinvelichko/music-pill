@@ -24,9 +24,8 @@ that **links to a song on Spotify**, with optional background audio that
 > host. The component never downloads, rips, proxies, or plays audio from
 > Spotify.
 
-> **Status:** v0.1.0, not yet published to npm. Installation examples below use
-> placeholders. The working path today is building the repo and using the
-> files in `dist/`.
+> **Install:** `npm install music-pill`, or load it from a CDN with one
+> `<script>` tag (see [Install](#install)).
 
 ## Contents
 
@@ -93,18 +92,26 @@ fills in the title and artwork for you.
 
 Runnable pages are listed under [Examples and the playground](#examples-and-the-playground).
 
-### After publication (placeholders)
+### Install
 
-The package name `music-pill` is a working name and may not be available on npm.
+From npm:
 
 ```sh
-npm install <package-name>@<version>
+npm install music-pill
 ```
 
-```html
-<!-- self-hosted copy of dist/auto.js (recommended), or a pinned CDN URL once one exists -->
-<script type="module" src="https://<cdn-host>/<package-name>@<version>/dist/auto.js"></script>
+```js
+import 'music-pill/auto'; // registers <music-pill> (browser only)
 ```
+
+Or with no build step, from a CDN. Pin the version:
+
+```html
+<script type="module" src="https://cdn.jsdelivr.net/npm/music-pill@0.1.0/dist/auto.js"></script>
+```
+
+Self-hosting `dist/auto.js` works too, and keeps third-party CDNs out of your
+Content Security Policy.
 
 ---
 
@@ -262,7 +269,7 @@ The resolver keeps to what oEmbed actually documents:
 It is also available programmatically (Node 20+ or browsers). An invalid track URL throws `TypeError`. A network error, HTTP error, CORS block, or unusable oEmbed body resolves with `status: "unavailable"` and null title and artwork fields. `fetch` and `signal` can be passed in the options object.
 
 ```js
-import { resolveSpotifyMetadata, toMusicPillSnippet } from '<package-name>/resolve';
+import { resolveSpotifyMetadata, toMusicPillSnippet } from 'music-pill/resolve';
 const meta = await resolveSpotifyMetadata('spotify:track:TRACK_ID');
 console.log(toMusicPillSnippet(meta, { artist: 'Artist name' }));
 ```
@@ -594,10 +601,10 @@ The pill follows these rules from Spotify's
 
 | Import | Safe on the server? | Effect |
 | --- | --- | --- |
-| `<package-name>` | Yes | Exports `registerMusicPill()`, types, and URL/attribute helpers. Importing it evaluates no `window`, `document`, `HTMLElement` or `customElements`. `registerMusicPill()` is a no-op outside a browser and returns `undefined`. |
-| `<package-name>/resolve` | Yes | The oEmbed metadata helper. |
-| `<package-name>/auto` | Browser only (it no-ops in Node) | Registers `<music-pill>` as a side effect, and re-exports the root API. Use it from `<script type="module">` or client-only code. |
-| `<package-name>/react-jsx` | Types only | Opt-in JSX typing for React. |
+| `music-pill` | Yes | Exports `registerMusicPill()`, types, and URL/attribute helpers. Importing it evaluates no `window`, `document`, `HTMLElement` or `customElements`. `registerMusicPill()` is a no-op outside a browser and returns `undefined`. |
+| `music-pill/resolve` | Yes | The oEmbed metadata helper. |
+| `music-pill/auto` | Browser only (it no-ops in Node) | Registers `<music-pill>` as a side effect, and re-exports the root API. Use it from `<script type="module">` or client-only code. |
+| `music-pill/react-jsx` | Types only | Opt-in JSX typing for React. |
 
 `registerMusicPill(tagName?)` guards duplicate definitions. If the tag is
 already defined, for example by a second copy of the bundle, it returns the
@@ -627,13 +634,13 @@ custom element. Pass attributes as **strings**. Event names contain dashes.
 
 ```tsx
 // Once, anywhere in your types (opt-in JSX typing; adds no React runtime):
-import type {} from '<package-name>/react-jsx';
+import type {} from 'music-pill/react-jsx';
 
 import { useEffect } from 'react';
 
 export function SongPill() {
   useEffect(() => {
-    void import('<package-name>/auto'); // browser-only registration
+    void import('music-pill/auto'); // browser-only registration
   }, []);
   return (
     <music-pill
@@ -656,19 +663,19 @@ JSX type from `music-pill/react-jsx` and is not an HTML attribute. On React 18, 
 ```tsx
 // app/song-pill.tsx
 'use client';
-import type {} from '<package-name>/react-jsx';
+import type {} from 'music-pill/react-jsx';
 import { useEffect } from 'react';
 
 export default function SongPill() {
   useEffect(() => {
-    void import('<package-name>/auto');
+    void import('music-pill/auto');
   }, []);
   return <music-pill spotify-url="https://open.spotify.com/track/TRACK_ID" song-title="Song" artist="Artist" />;
 }
 ```
 
 Render `<SongPill />` from a layout or page. Server Components can import the
-SSR-safe root (`<package-name>`) for types or URL validation, but registration
+SSR-safe root (`music-pill`) for types or URL validation, but registration
 must happen in a client component.
 
 ### Vue 3 (Vite)
@@ -683,7 +690,7 @@ export default {
 
 ```vue
 <script setup>
-import '<package-name>/auto';
+import 'music-pill/auto';
 const onState = (e) => console.log(e.detail.state);
 </script>
 <template>
@@ -701,7 +708,7 @@ With Nuxt, set the same `isCustomElement` under `vue.compilerOptions` and import
   import { onMount } from 'svelte';
   let pill;
   onMount(async () => {
-    await import('<package-name>/auto');
+    await import('music-pill/auto');
     const onState = (e) => console.log(e.detail.state);
     pill.addEventListener('music-pill-statechange', onState);
     return () => pill.removeEventListener('music-pill-statechange', onState);
@@ -722,7 +729,7 @@ Importing inside `onMount` keeps SvelteKit SSR clean.
 ---
 <music-pill spotify-url="https://open.spotify.com/track/TRACK_ID" song-title="Song" artist="Artist"></music-pill>
 <script>
-  import '<package-name>/auto'; // Astro bundles and runs this in the browser only
+  import 'music-pill/auto'; // Astro bundles and runs this in the browser only
 </script>
 ```
 
@@ -730,7 +737,7 @@ Importing inside `onMount` keeps SvelteKit SSR clean.
 
 ```ts
 // main.ts
-import '<package-name>/auto';
+import 'music-pill/auto';
 ```
 
 ```ts
@@ -836,9 +843,9 @@ npm run check   # typecheck, unit tests, build, SSR import, packed-tarball consu
 
 CI never publishes. To release:
 
-1. Choose an available package name. Update `name` in `package.json` and the `<package-name>` placeholders in this README.
-2. Update `version` and `CHANGELOG.md`.
+1. Update `version` in `package.json`, `CHANGELOG.md`, and the pinned CDN URL in this README.
+2. `npm login` (an account with 2FA and publish rights to `music-pill`).
 3. `npm ci && npm run check`. Everything must pass.
 4. `npm pack --dry-run` to review the file list (only `dist/`, `bin/` and the docs).
-5. `npm publish --access public`, using npm 2FA, optionally with `--provenance` from a trusted CI environment.
-6. Tag the release: `git tag v<version> && git push --tags`.
+5. `npm publish` (`prepublishOnly` rebuilds `dist/` and re-runs the SSR check first). Enter your 2FA code when asked.
+6. Tag and release: `git tag v<version> && git push --tags`, then create a GitHub release from the changelog entry.

@@ -69,7 +69,8 @@
     "test:pack": "node scripts/pack-check.mjs",
     "check": "npm run typecheck && npm test && npm run build && npm run test:ssr && npm run test:pack && npm run test:e2e",
     "serve": "node scripts/serve.mjs",
-    "playground": "npm run build && node scripts/serve.mjs --open /playground/"
+    "playground": "npm run build && node scripts/serve.mjs --open /playground/",
+    "prepublishOnly": "npm run build && npm run test:ssr"
   },
   "peerDependencies": {
     "@types/react": ">=18"
@@ -87,5 +88,8 @@
     "typescript": "6.0.3",
     "vite": "8.3.1",
     "vitest": "5.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

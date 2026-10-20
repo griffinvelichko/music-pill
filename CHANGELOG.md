@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-19
+
+First public release on npm.
+
 ### Added
+
+- `<music-pill>` custom element: a fixed-position link to a Spotify track
+  with artwork, title and artist, in six positions, three sizes and
+  auto/light/dark themes.
+- Optional site-owner-hosted audio played through Web Audio, with fade-in,
+  fade-out and restart looping. Autoplay is attempted once, at most one
+  instance plays at a time, mute is remembered for the session, and playback
+  pauses while the page is hidden.
+- A separate, accessible sound on/off button, or `sound-control="host"` if
+  you provide your own control.
+- `enableSound()`, `mute()` and a read-only `playbackState`, plus typed
+  `music-pill-ready`, `music-pill-statechange`, `music-pill-autoplay-blocked`
+  and `music-pill-error` events.
+- SSR-safe root entry (`registerMusicPill()`), a browser-only `auto` entry,
+  opt-in React JSX types, and the `music-pill/resolve` helper with the
+  `music-pill-resolve` CLI for oEmbed metadata.
 
 - Multiple audio sources. `audio-src` still plays one file. Direct `<source>`
   children, an `audio-sources` JSON attribute, or the `audioSources` property
@@ -34,24 +54,5 @@ All notable changes to this project are documented here. The format follows
   the first-gesture start, reduced motion, the resolver CLI, bundle size, and
   the limit that a decode or network failure does not try the next file.
 
-## [0.1.0] - 2026-10-17
-
-First version. Not yet published to npm.
-
-### Added
-
-- `<music-pill>` custom element: a fixed-position link to a Spotify track
-  with artwork, title and artist, in six positions, three sizes and
-  auto/light/dark themes.
-- Optional `audio-src` playback through Web Audio with fade-in, fade-out
-  and restart looping. Autoplay is attempted once, at most one instance plays
-  at a time, mute is remembered for the session, and playback pauses while the
-  page is hidden.
-- A separate, accessible sound on/off button, or `sound-control="host"` if
-  you provide your own control.
-- `enableSound()`, `mute()` and a read-only `playbackState`, plus typed
-  `music-pill-ready`, `music-pill-statechange`, `music-pill-autoplay-blocked`
-  and `music-pill-error` events.
-- SSR-safe root entry (`registerMusicPill()`), a browser-only `auto` entry,
-  opt-in React JSX types, and the `music-pill/resolve` helper with the
-  `music-pill-resolve` CLI for oEmbed metadata.
+[Unreleased]: https://github.com/griffinvelichko/music-pill/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/griffinvelichko/music-pill/releases/tag/v0.1.0
