@@ -37,7 +37,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "music-pill-resolve": "./bin/music-pill-resolve.mjs"
+    "music-pill-resolve": "bin/music-pill-resolve.mjs"
   },
   "files": [
     "dist",
