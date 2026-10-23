@@ -6,3 +6,4 @@ playwright-report/
 *.tgz
 .DS_Store
 .tmp/
+_site/

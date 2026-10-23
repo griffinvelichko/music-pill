@@ -146,7 +146,7 @@ function attrsFromForm() {
       'spotify-url': FIXTURE_TRACK,
       'song-title': 'Test tone (generated, 440 Hz)',
       artist: 'music-pill fixture: not a Spotify recording',
-      artwork: '/fixtures/artwork/tone-art.svg',
+      artwork: '../fixtures/artwork/tone-art.svg',
       'audio-src': $('tone-file').value,
       'fade-duration': $('tone-fade').value,
       autoplay: 'off',
@@ -187,7 +187,7 @@ function applySources(colours) {
     'spotify-url': FIXTURE_TRACK,
     'song-title': scenario === 'error' ? 'Unplayable source' : scenario === 'multi' ? 'Several sources' : 'Single source',
     artist: 'Generated tone, not a Spotify recording',
-    artwork: '/fixtures/artwork/tone-art.svg',
+    artwork: '../fixtures/artwork/tone-art.svg',
     autoplay: 'off',
     position: $('position').value,
     size: $('size').value,
@@ -198,16 +198,16 @@ function applySources(colours) {
   }
   for (const [name, value] of Object.entries(attrs)) pill.setAttribute(name, value);
   if (scenario === 'single') {
-    pill.setAttribute('audio-src', '/fixtures/audio/test-tone.wav');
+    pill.setAttribute('audio-src', '../fixtures/audio/test-tone.wav');
   } else if (scenario === 'multi') {
     pill.insertAdjacentHTML(
       'beforeend',
-      '<source src="/fixtures/audio/does-not-exist.mp3" type="audio/x-music-pill-unsupported"><source src="/fixtures/audio/test-tone.wav" type="audio/wav">',
+      '<source src="../fixtures/audio/does-not-exist.mp3" type="audio/x-music-pill-unsupported"><source src="../fixtures/audio/test-tone.wav" type="audio/wav">',
     );
   } else {
     pill.insertAdjacentHTML(
       'beforeend',
-      '<source src="/fixtures/audio/test-tone.wav" type="audio/x-music-pill-unsupported">',
+      '<source src="../fixtures/audio/test-tone.wav" type="audio/x-music-pill-unsupported">',
     );
   }
   $('scenario-note').textContent = SOURCE_NOTES[scenario];

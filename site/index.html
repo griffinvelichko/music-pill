@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>music-pill</title>
+  <meta name="description" content="A small web component that links to a song on Spotify, with optional licensed background audio that fades and loops.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+  <style>
+    /* Layout: one narrow reading column; the live pill sits in the real viewport corner as the demo. */
+    :root {
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --ink: #15171c;
+      --muted: #5b6070;
+      --line: #dfe2ea;
+      --accent: #2747c7;
+      --code-bg: #eef0f5;
+      --display: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --body: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0f1115; --surface: #171a20; --ink: #eef0f4; --muted: #a2a8b6;
+        --line: #2a2f39; --accent: #8aa2ff; --code-bg: #1d2129; color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0f1115; --surface: #171a20; --ink: #eef0f4; --muted: #a2a8b6;
+      --line: #2a2f39; --accent: #8aa2ff; --code-bg: #1d2129; color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.6 var(--body);
+      padding-left: max(16px, env(safe-area-inset-left, 0px));
+      padding-right: max(16px, env(safe-area-inset-right, 0px));
+    }
+    main { max-width: 680px; margin: 0 auto; padding-block: 72px 160px; display: grid; gap: 56px; }
+    h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; }
+    h1 { font-size: clamp(40px, 8vw, 64px); font-weight: 800; letter-spacing: -0.035em; line-height: 1; }
+    h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+    p { margin: 0; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+    code { font-family: var(--mono); font-size: 0.88em; }
+
+    .hero { display: grid; gap: 20px; }
+    .eyebrow { font: 500 13px/1 var(--mono); color: var(--muted); letter-spacing: 0.02em; }
+    .lede { font-size: 19px; color: var(--muted); max-width: 34em; }
+    .lede strong { color: var(--ink); font-weight: 600; }
+    .pointer { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .pointer svg { width: 16px; height: 16px; flex: none; }
+
+    section { display: grid; gap: 16px; }
+    .code {
+      background: var(--code-bg);
+      border-radius: 12px;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .code-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 8px 10px 8px 18px; border-bottom: 1px solid var(--line);
+    }
+    .code pre {
+      margin: 0;
+      padding: 14px 18px 16px;
+      overflow-x: auto;
+      font: 13.5px/1.65 var(--mono);
+      white-space: pre;
+    }
+    .copy {
+      font: 500 12px/1 var(--body); color: var(--ink);
+      background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+      padding: 7px 10px; cursor: pointer;
+    }
+    .copy:hover { border-color: var(--accent); }
+    .label { font: 500 12px/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .links { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+    .links a {
+      display: grid; gap: 4px; padding: 16px; text-decoration: none; color: var(--ink);
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      transition: border-color 150ms ease;
+    }
+    .links a:hover { border-color: var(--accent); }
+    .links strong { font-family: var(--display); font-size: 16px; }
+    .links span { font-size: 14px; color: var(--muted); }
+
+    .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+    .modes div { display: grid; gap: 6px; align-content: start; }
+    .modes h3 { margin: 0; font: 700 16px/1.3 var(--display); }
+    .modes p, .note { font-size: 15px; color: var(--muted); }
+
+    footer { border-top: 1px solid var(--line); padding-top: 24px; display: grid; gap: 10px; font-size: 14px; color: var(--muted); }
+    footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+
+    @media (prefers-reduced-motion: reduce) { .links a { transition: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">npm i music-pill · v0.1.0 · MIT</p>
+    <h1>music-pill</h1>
+    <p class="lede">A small web component that shows <strong>the song on your site</strong> and links to it on Spotify. One script, one tag, any framework. Add audio you're licensed to play and it fades in, loops, and fades out.</p>
+    <p class="pointer">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 6v7H6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      The pill in the corner of this page is the real component.
+    </p>
+  </header>
+
+  <section aria-labelledby="install">
+    <h2 id="install">Add it to a page</h2>
+    <div class="code">
+      <div class="code-bar"><p class="label">No build step</p><button class="copy" type="button" data-copy="snippet-cdn">Copy</button></div>
+        <pre id="snippet-cdn"><code>&lt;script type="module" src="https://cdn.jsdelivr.net/npm/music-pill@0.1.0/dist/auto.js"&gt;&lt;/script&gt;
+
+&lt;music-pill
+  spotify-url="https://open.spotify.com/track/5GjUhwxykUVYCYkiNo4BEM"
+  song-title="Strobe"
+  artist="deadmau5"
+&gt;&lt;/music-pill&gt;</code></pre>
+    </div>
+    <div class="code">
+      <div class="code-bar"><p class="label">With a bundler</p><button class="copy" type="button" data-copy="snippet-npm">Copy</button></div>
+        <pre id="snippet-npm"><code>npm install music-pill
+
+import 'music-pill/auto';</code></pre>
+    </div>
+    <p class="note">React, Next.js, Vue, Svelte, Astro and Angular use the same element. Setup notes for each are in the <a href="https://github.com/griffinvelichko/music-pill#framework-integration">README</a>.</p>
+  </section>
+
+  <section aria-labelledby="try">
+    <h2 id="try">Try it</h2>
+    <div class="links">
+      <a href="playground/"><strong>Playground</strong><span>Set the song, size, position and colours, then copy the tag.</span></a>
+      <a href="examples/strobe/"><strong>Strobe</strong><span>A link-only pill on a blank white page.</span></a>
+      <a href="examples/sources/"><strong>Audio formats</strong><span>One file, several formats, and an unplayable source, using a test tone.</span></a>
+      <a href="examples/plain-html/"><strong>Plain HTML</strong><span>The smallest setup, with no tooling.</span></a>
+    </div>
+  </section>
+
+  <section aria-labelledby="modes">
+    <h2 id="modes">Two ways to use it</h2>
+    <div class="modes">
+      <div>
+        <h3>Link only</h3>
+        <p>Artwork, title and artist, linking to the track on Spotify. No audio, no sound button, nothing that suggests music is playing.</p>
+      </div>
+      <div>
+        <h3>With your own audio</h3>
+        <p>Point <code>audio-src</code> at a file of the same recording that you're licensed to play on a website. Browsers usually block sound until a visitor interacts, so the pill adds a small sound button.</p>
+      </div>
+    </div>
+    <p class="note">A Spotify link doesn't grant any right to play the song, or any other audio, on your site. The component never downloads or plays audio from Spotify.</p>
+  </section>
+
+  <footer>
+    <nav aria-label="Project links">
+      <a href="https://www.npmjs.com/package/music-pill">npm</a>
+      <a href="https://github.com/griffinvelichko/music-pill">GitHub</a>
+      <a href="https://github.com/griffinvelichko/music-pill/releases">Releases</a>
+      <a href="https://github.com/griffinvelichko/music-pill/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+    </nav>
+    <p>Code is MIT-licensed. Spotify and the Spotify logo are trademarks of Spotify AB; this project is not affiliated with Spotify. Album artwork shown is provided by Spotify.</p>
+  </footer>
+</main>
+
+<music-pill
+  spotify-url="https://open.spotify.com/track/5GjUhwxykUVYCYkiNo4BEM"
+  song-title="Strobe"
+  artist="deadmau5"
+  artwork="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0288187e12b8a3a1063eb0dd80"
+></music-pill>
+
+<script type="module" src="./dist/auto.js"></script>
+<script>
+  for (const button of document.querySelectorAll('[data-copy]')) {
+    button.addEventListener('click', async () => {
+      const text = document.getElementById(button.dataset.copy).textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = 'Copied';
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById(button.dataset.copy));
+        const selection = getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = 'Selected';
+      }
+      setTimeout(() => (button.textContent = 'Copy'), 1600);
+    });
+  }
+</script>
+</body>
+</html>

@@ -71,7 +71,8 @@
     "check": "npm run typecheck && npm test && npm run build && npm run test:ssr && npm run test:pack && npm run test:e2e",
     "serve": "node scripts/serve.mjs",
     "playground": "npm run build && node scripts/serve.mjs --open /playground/",
-    "prepublishOnly": "npm run build && npm run test:ssr"
+    "prepublishOnly": "npm run build && npm run test:ssr",
+    "site": "npm run build && node scripts/build-site.mjs"
   },
   "peerDependencies": {
     "@types/react": ">=18"
