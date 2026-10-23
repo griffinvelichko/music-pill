@@ -1,5 +1,7 @@
 # music-pill
 
+**Website and live demo:** https://griffinvelichko.github.io/music-pill/ · [Playground](https://griffinvelichko.github.io/music-pill/playground/) · [npm](https://www.npmjs.com/package/music-pill)
+
 A small, framework-independent web component: a fixed "now playing" style pill
 that **links to a song on Spotify**, with optional background audio that
 **you host and are licensed to play**, which fades in, loops, and fades out.
